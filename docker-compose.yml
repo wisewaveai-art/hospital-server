@@ -6,10 +6,10 @@ services:
     container_name: mariadb
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: examplepassword
+      MYSQL_ROOT_PASSWORD: sqlroot
       MYSQL_DATABASE: wisehospital
       MYSQL_USER: root
-      MYSQL_PASSWORD: examplepassword
+      MYSQL_PASSWORD: passsql
     ports:
       - "3306:3306"
     volumes:

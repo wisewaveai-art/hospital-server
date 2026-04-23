@@ -1,8 +1,14 @@
 const pool = require('../db');
 
-// Direct DB connection using our mysql configured pool
+// Adapter to convert PostgreSQL `$1, $2` syntax to MySQL `?` and return `.rows`
 module.exports = {
-    query: (text, params) => pool.query(text, params),
+    query: async (text, params = []) => {
+        // Convert $1, $2, etc. to ?
+        const mysqlQuery = text.replace(/\$\d+/g, '?');
+        const [rows] = await pool.query(mysqlQuery, params);
+        return { rows, rowCount: rows.length };
+    },
     pool
 };
+
 

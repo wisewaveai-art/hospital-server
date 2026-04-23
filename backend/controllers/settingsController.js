@@ -1,11 +1,10 @@
-const pool = require('../db');
+const directDb = require('../utils/directDb');
 
 exports.getSettings = async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM organizations LIMIT 1');
+    const result = await directDb.query('SELECT * FROM organizations LIMIT 1');
     if (result.rowCount === 0) {
-      const insertRes = await pool.query('INSERT INTO organizations (name) VALUES ($1) RETURNING *', ['Wise City Hospital']);
-      return res.json(insertRes.rows[0]);
+      return res.json({});
     }
     res.json(result.rows[0]);
   } catch (err) {
@@ -22,7 +21,7 @@ exports.updateSettings = async (req, res) => {
         delete updates.id;
         delete updates.created_at;
 
-        const existing = await pool.query('SELECT * FROM organizations LIMIT 1');
+        const existing = await directDb.query('SELECT * FROM organizations LIMIT 1');
         const current = existing.rowCount ? existing.rows[0] : null;
 
         let result;
@@ -35,7 +34,7 @@ exports.updateSettings = async (req, res) => {
                 const values = Object.values(updates);
                 const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
                 const insertQuery = `INSERT INTO organizations (${columns.join(', ')}) VALUES (${placeholders}) RETURNING *`;
-                const insertRes = await pool.query(insertQuery, values);
+                const insertRes = await directDb.query(insertQuery, values);
                 result = insertRes.rows[0];
             } else {
                 // Update existing organization
@@ -43,7 +42,7 @@ exports.updateSettings = async (req, res) => {
                 const values = Object.values(updates);
                 const setClause = columns.map((col, i) => `${col} = $${i + 1}`).join(', ');
                 const updateQuery = `UPDATE organizations SET ${setClause} WHERE id = $${columns.length + 1} RETURNING *`;
-                const updateRes = await pool.query(updateQuery, [...values, current.id]);
+                const updateRes = await directDb.query(updateQuery, [...values, current.id]);
                 result = updateRes.rows[0];
             }
             res.json(result);
@@ -120,7 +119,7 @@ exports.getPresets = async (req, res) => {
 
 exports.getTheme = async (req, res) => {
     try {
-        const result = await pool.query('SELECT app_theme FROM organizations LIMIT 1');
+        const result = await directDb.query('SELECT app_theme FROM organizations LIMIT 1');
     if (result.rowCount === 0) {
         return res.json({});
     }
@@ -137,12 +136,12 @@ exports.updateTheme = async (req, res) => {
     try {
         const { theme } = req.body;
         
-        const orgResult = await pool.query('SELECT id FROM organizations LIMIT 1');
+        const orgResult = await directDb.query('SELECT id FROM organizations LIMIT 1');
     if (orgResult.rowCount === 0) {
         return res.status(404).json({ error: 'Organization not found' });
     }
     const orgId = orgResult.rows[0].id;
-    const updateRes = await pool.query('UPDATE organizations SET app_theme = $1 WHERE id = $2 RETURNING app_theme', [theme, orgId]);
+    const updateRes = await directDb.query('UPDATE organizations SET app_theme = $1 WHERE id = $2 RETURNING app_theme', [theme, orgId]);
     const data = updateRes.rows[0];
         res.json(data.app_theme);
     } catch (err) {

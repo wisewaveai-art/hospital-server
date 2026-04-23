@@ -1,4 +1,4 @@
-const supabase = require('../supabaseClient');
+const pool = require('../db');
 
 /**
  * Middleware to handle organization/tenant detection
@@ -21,14 +21,13 @@ const tenantHandler = async (req, res, next) => {
         }
 
         if (slug) {
-            const { data: org, error } = await supabase
-                .from('organizations')
-                .select('id')
-                .eq('slug', slug)
-                .single();
+            const [rows] = await pool.query(
+                `SELECT id FROM organizations WHERE slug = ? LIMIT 1`,
+                [slug]
+            );
 
-            if (org) {
-                organizationId = org.id;
+            if (rows && rows.length > 0) {
+                organizationId = rows[0].id;
             }
         }
 

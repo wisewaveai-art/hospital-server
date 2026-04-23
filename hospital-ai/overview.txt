@@ -1,0 +1,46 @@
+# WiseHospital AI Clinical Intelligence Backend Overview
+
+## Architecture
+The AI Backend is a Python-based microservice built with **FastAPI**. It serves as the intelligent core of the WiseHospital platform, providing advanced medical reasoning and predictive analytics.
+
+## Technology Stack
+- **Framework**: FastAPI (Python 3.11+)
+- **AI Engine**: Hugging Face Inference API (using `mistralai/Mistral-7B-Instruct-v0.3`)
+- **Validation**: Pydantic models for strict data schemas
+- **Environment**: Managed via `.env` with a Hugging Face Token (`HF_TOKEN`)
+
+## Core Features
+
+### 1. Ambient Clinical Intelligence (Electronic Scribe)
+- **Endpoint**: `/scribe/soap-notes`
+- **Function**: Automatically transforms doctor-patient consultation transcripts into structured **SOAP notes** (Subjective, Objective, Assessment, Plan). This reduces administrative burden on physicians.
+
+### 2. Clinical Decision Support System (CDSS)
+- **Endpoint**: `/cdss/analyze`
+- **Function**: Processes patient history, current medications, and vitals to flag potential drug-drug interactions, allergies, or early warning signs for conditions like Sepsis or AKI (Acute Kidney Injury).
+
+### 3. AI-Powered Differential Diagnosis
+- **Endpoint**: `/diagnosis/differential`
+- **Function**: Analyzes patient symptoms, age, and gender to provide a ranked list of potential diagnoses with probability percentages and suggested immediate tests.
+
+### 4. Smart Scheduling & Patient Flow
+- **Endpoint**: `/scheduling/predict-flow`
+- **Function**: Uses a predictive engine (currently heuristic-based) to estimate the probability of patient "no-shows" based on historical data and distance from the hospital, suggesting optimal booking strategies.
+
+### 5. Precision Medicine (Genomics)
+- **Endpoint**: `/personalized-care/genomics`
+- **Function**: Analyzes genetic markers and patient conditions to suggest personalized medication dosages and monitor for biomarker-specific adverse reactions.
+
+### 6. Imaging Triage
+- **Endpoint**: `/imaging/triage`
+- **Function**: A placeholder system designed to prioritize diagnostic imaging (X-rays, MRIs) based on urgent findings, intended to be integrated with Computer Vision models.
+
+## How it works (Workflow)
+1. **Request**: The Frontend (Next.js) or Main Backend (Node.js) sends a JSON request to the AI Backend.
+2. **Processing**: The `AIEngine` class formats the data into a medical-grade prompt.
+3. **Inference**: The prompt is sent to Hugging Face's Mistral model for high-fidelity medical reasoning.
+4. **Response**: The structured response is returned to the requester for display in the doctor's dashboard or patient record.
+
+## Health Monitoring
+- Check the status at `http://localhost:8000/health`
+- Currently reporting: `HuggingFace-Medical-Optimized`

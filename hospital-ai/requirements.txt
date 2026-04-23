@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+huggingface_hub
+python-dotenv
+pydantic
+pandas
+scikit-learn
+requests
+qdrant-client
+sentence-transformers
+google-generativeai

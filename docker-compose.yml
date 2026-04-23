@@ -1,0 +1,58 @@
+version: '3.9'
+
+services:
+  mariadb:
+    image: mariadb:10.11
+    container_name: mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: examplepassword
+      MYSQL_DATABASE: wisehospital
+      MYSQL_USER: root
+      MYSQL_PASSWORD: examplepassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mariadb
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
+
+  hospital_ai:
+    build:
+      context: ./hospital-ai
+      dockerfile: Dockerfile
+    container_name: hospital_ai
+    restart: unless-stopped
+    env_file:
+      - ./hospital-ai/.env
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mariadb
+    deploy:
+      resources:
+        limits:
+          memory: 1.3G
+
+volumes:
+  mariadb_data:
+    driver: local

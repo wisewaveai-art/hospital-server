@@ -84,22 +84,14 @@ exports.login = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Find user
-        const { data: user, error } = await supabase
-            .from('users')
-            .select('*')
-            .eq('email', email)
-            .single();
-
-        if (error) {
-            console.error('Supabase Query Error during login:', error);
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
+        const { rows } = await directDb.query('SELECT * FROM users WHERE email = $1', [email]);
         
-        if (!user) {
+        if (rows.length === 0) {
             console.log(`Login attempt failed: user not found for ${email}`);
             return res.status(401).json({ error: 'Invalid credentials' });
         }
+        
+        const user = rows[0];
 
         // Fetch organization separately to avoid join errors if foreign keys are missing
         let organization = null;

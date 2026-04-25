@@ -1,13 +1,42 @@
-const { tenantQuery, withOrgData } = require('../utils/tenantQuery');
+const directDb = require('../utils/directDb');
+
+const safeQuery = async (queryStr, params = []) => {
+    try {
+        const { rows } = await directDb.query(queryStr, params);
+        return rows;
+    } catch (e) {
+        console.warn('Billing Module Unmigrated or Query Failed:', e.message);
+        return [];
+    }
+};
 
 exports.getInvoices = async (req, res) => {
     try {
-        const { data, error } = await tenantQuery('invoices', req)
-            .select('*, patients(id, users(full_name))')
-            .order('created_at', { ascending: false });
+        const orgId = req.organizationId;
+        
+        let queryStr = `
+            SELECT i.*, 
+                   p.id as patient_id, 
+                   u.full_name as patient_name
+            FROM invoices i
+            LEFT JOIN patients p ON i.patient_id = p.id
+            LEFT JOIN users u ON p.user_id = u.id
+            WHERE i.organization_id = $1
+            ORDER BY i.created_at DESC
+        `;
+        
+        const rows = await safeQuery(queryStr, [orgId]);
+        
+        const formatted = rows.map(r => {
+            const { patient_id, patient_name, ...inv } = r;
+            return {
+                ...inv,
+                patient: patient_name ? patient_name : 'Unknown',
+                patients: { users: { full_name: patient_name } }
+            };
+        });
 
-        if (error) throw error;
-        res.json(data);
+        res.json(formatted);
     } catch (err) {
         res.status(500).json({ error: 'Server error fetching invoices' });
     }
@@ -15,14 +44,16 @@ exports.getInvoices = async (req, res) => {
 
 exports.createInvoice = async (req, res) => {
     try {
-        const invoiceData = withOrgData(req.body, req);
-        const { data, error } = await tenantQuery('invoices', req)
-            .insert([invoiceData])
-            .select()
-            .single();
+        const orgId = req.organizationId;
+        const { patient_id, amount, status, date } = req.body;
+        
+        const { rows } = await directDb.query(
+            `INSERT INTO invoices (organization_id, patient_id, amount, status, created_at, invoice_number) 
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+            [orgId, patient_id, amount, status || 'Pending', date || new Date(), 'INV-' + Math.floor(Math.random() * 100000)]
+        );
 
-        if (error) throw error;
-        res.status(201).json(data);
+        res.status(201).json(rows[0]);
     } catch (err) {
         res.status(500).json({ error: 'Server error creating invoice' });
     }
@@ -30,12 +61,15 @@ exports.createInvoice = async (req, res) => {
 
 exports.getPayments = async (req, res) => {
     try {
-        const { data, error } = await tenantQuery('payments', req)
-            .select('*, invoices(invoice_number)')
-            .order('payment_date', { ascending: false });
-
-        if (error) throw error;
-        res.json(data);
+        const orgId = req.organizationId;
+        const rows = await safeQuery(
+            `SELECT p.*, i.invoice_number 
+             FROM payments p 
+             LEFT JOIN invoices i ON p.invoice_id = i.id 
+             WHERE p.organization_id = $1 ORDER BY p.payment_date DESC`,
+            [orgId]
+        );
+        res.json(rows);
     } catch (err) {
         res.status(500).json({ error: 'Server error fetching payments' });
     }
@@ -43,21 +77,20 @@ exports.getPayments = async (req, res) => {
 
 exports.addPayment = async (req, res) => {
     try {
-        const paymentData = withOrgData(req.body, req);
-        const { data, error } = await tenantQuery('payments', req)
-            .insert([paymentData])
-            .select()
-            .single();
+        const orgId = req.organizationId;
+        const { invoice_id, amount, payment_method } = req.body;
+        
+        const { rows } = await directDb.query(
+            `INSERT INTO payments (organization_id, invoice_id, amount, payment_method, payment_date) 
+             VALUES ($1, $2, $3, $4, NOW()) RETURNING *`,
+            [orgId, invoice_id, amount, payment_method]
+        );
 
-        if (error) throw error;
+        if (rows[0]) {
+            await directDb.query(`UPDATE invoices SET status = 'Paid' WHERE id = $1`, [invoice_id]);
+        }
 
-        // Update invoice status if fully paid
-        // (Logic for partial payments could be added here)
-        await tenantQuery('invoices', req)
-            .update({ status: 'paid' })
-            .eq('id', paymentData.invoice_id);
-
-        res.status(201).json(data);
+        res.status(201).json(rows[0]);
     } catch (err) {
         res.status(500).json({ error: 'Server error processing payment' });
     }

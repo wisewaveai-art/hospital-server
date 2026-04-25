@@ -8,36 +8,35 @@ exports.updateUserRole = async (req, res) => {
     try {
         const { id } = req.params;
         const { role } = req.body;
+        const orgId = req.organizationId;
 
-        const validRoles = ['admin', 'subadmin', 'doctor', 'staff', 'patient', 'vendor'];
+        const validRoles = ['admin', 'subadmin', 'doctor', 'staff', 'patient', 'vendor', 'nurse'];
         if (!validRoles.includes(role)) {
             return res.status(400).json({ error: 'Invalid role' });
         }
 
-        // 1. Update User Role (Scoped to tenant if not superadmin)
-        const { data: user, error } = await tenantQuery('users', req)
-            .update({ role })
-            .eq('id', id)
-            .select()
-            .single();
-
-        if (error) throw error;
+        // 1. Update User Role
+        const updateQuery = `UPDATE users SET role = $1 WHERE id = $2 RETURNING *`;
+        const { rows } = await directDb.query(updateQuery, [role, id]);
+        
+        if (!rows.length) throw new Error('User not found');
+        const user = rows[0];
 
         // 2. Auto-create profile based on role (injecting organization_id)
         if (role === 'doctor') {
-            const { data: existing } = await tenantQuery('doctors', req).select('id').eq('user_id', id).single();
-            if (!existing) {
-                await tenantQuery('doctors', req).insert([withOrgData({ user_id: id, specialization: 'General' }, req)]);
+            const { rowCount } = await directDb.query('SELECT id FROM doctors WHERE user_id = $1', [id]);
+            if (rowCount === 0) {
+                await directDb.query('INSERT INTO doctors (user_id, organization_id, full_name) VALUES ($1, $2, $3)', [id, orgId, user.full_name]);
             }
-        } else if (role === 'staff') {
-            const { data: existing } = await tenantQuery('staff', req).select('id').eq('user_id', id).single();
-            if (!existing) {
-                await tenantQuery('staff', req).insert([withOrgData({ user_id: id, designation: 'Staff' }, req)]);
+        } else if (role === 'staff' || role === 'nurse') {
+            const { rowCount } = await directDb.query('SELECT id FROM staff WHERE user_id = $1', [id]);
+            if (rowCount === 0) {
+                await directDb.query('INSERT INTO staff (user_id, organization_id, full_name, designation) VALUES ($1, $2, $3, $4)', [id, orgId, user.full_name, role]);
             }
         } else if (role === 'patient') {
-            const { data: existing } = await tenantQuery('patients', req).select('id').eq('user_id', id).single();
-            if (!existing) {
-                await tenantQuery('patients', req).insert([withOrgData({ user_id: id }, req)]);
+            const { rowCount } = await directDb.query('SELECT id FROM patients WHERE user_id = $1', [id]);
+            if (rowCount === 0) {
+                await directDb.query('INSERT INTO patients (user_id, organization_id, full_name) VALUES ($1, $2, $3)', [id, orgId, user.full_name]);
             }
         }
 
@@ -50,34 +49,31 @@ exports.updateUserRole = async (req, res) => {
 
 exports.getAllUsers = async (req, res) => {
     try {
-        // 1. Fetch Users
-        let query = tenantQuery('users', req)
-            .select('id, email, full_name, role, created_at, profile_pic, organization_id')
-            .order('created_at', { ascending: false });
+        const orgId = req.organizationId;
+        let queryStr = `
+            SELECT u.id, u.email, u.full_name, u.role, u.created_at, u.profile_pic, u.organization_id, o.name as org_name, o.slug as org_slug
+            FROM users u
+            LEFT JOIN organizations o ON u.organization_id = o.id
+            WHERE 1=1
+        `;
+        let params = [];
 
-        const { data: users, error } = await query;
-        if (error) throw error;
-
-        // 2. Fetch Organizations for these users (if any)
-        const orgIds = [...new Set(users.map(u => u.organization_id).filter(Boolean))];
-        let orgMap = {};
-        
-        if (orgIds.length > 0) {
-            const { data: orgs, error: orgError } = await supabase
-                .from('organizations')
-                .select('id, name, slug')
-                .in('id', orgIds);
-            
-            if (!orgError && orgs) {
-                orgs.forEach(o => { orgMap[o.id] = o; });
-            }
+        if (orgId && req.user?.role !== 'superadmin') {
+            queryStr += ' AND u.organization_id = $1';
+            params.push(orgId);
         }
+        
+        queryStr += ' ORDER BY u.created_at DESC';
 
-        // 3. Merge
-        const enrichedUsers = users.map(u => ({
-            ...u,
-            organizations: orgMap[u.organization_id] || null
-        }));
+        const { rows } = await directDb.query(queryStr, params);
+
+        const enrichedUsers = rows.map(u => {
+            const { org_name, org_slug, ...userData } = u;
+            return {
+                ...userData,
+                organizations: org_name ? { id: u.organization_id, name: org_name, slug: org_slug } : null
+            };
+        });
 
         res.json(enrichedUsers);
     } catch (err) {
@@ -91,15 +87,12 @@ exports.updateProfilePic = async (req, res) => {
         const { id } = req.params;
         const { profile_pic } = req.body;
         
-        const { data: user, error } = await supabase
-            .from('users')
-            .update({ profile_pic })
-            .eq('id', id)
-            .select()
-            .single();
+        const { rows } = await directDb.query(
+            'UPDATE users SET profile_pic = $1 WHERE id = $2 RETURNING *',
+            [profile_pic, id]
+        );
             
-        if (error) throw error;
-        res.json({ message: 'Profile picture updated', user });
+        res.json({ message: 'Profile picture updated', user: rows[0] });
     } catch(err) {
         console.error('Error updating profile pic:', err);
         res.status(500).json({ error: 'Server error updating profile pic' });

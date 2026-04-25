@@ -20,7 +20,7 @@ const pool = mysql.createPool({
 // Test connection on startup
 const fs = require('fs');
 const path = require('path');
-// Trigger restart
+// Trigger restart pat
 
 pool.getConnection()
   .then(async conn => {

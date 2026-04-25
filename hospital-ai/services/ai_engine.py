@@ -10,9 +10,9 @@ class AIEngine:
         self.api_key = os.getenv("HF_TOKEN")
         self.rag = RAGService()
         if self.api_key:
-            # Using Mistral via HF Inference API
+            # Using highly compatible Chat model via HF Inference API
             self.client = InferenceClient(api_key=self.api_key)
-            self.model_name = "mistralai/Mistral-7B-Instruct-v0.3" 
+            self.model_name = "Qwen/Qwen2.5-72B-Instruct" 
             print(f"AI Engine initialized with Hugging Face: {self.model_name}")
         else:
             print("Warning: HF_TOKEN not found. AI features will use mock responses.")
@@ -23,16 +23,14 @@ class AIEngine:
             return "Mock AI response: Please configure HF_TOKEN."
         
         try:
-            # Simple wrapper since chat_completion with streaming is verbose
-            response = ""
-            for message in self.client.chat_completion(
+            # Non-streaming call to prevent chunking schema mismatches
+            completion = self.client.chat_completion(
                 model=self.model_name,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=1000,
-                stream=True,
-            ):
-                response += message.choices[0].delta.content or ""
-            return response
+                stream=False,
+            )
+            return completion.choices[0].message.content or ""
         except Exception as e:
             return f"Error connecting to Hugging Face AI Engine: {str(e)}"
 

@@ -5,7 +5,13 @@ module.exports = {
     query: async (text, params = []) => {
         // Convert $1, $2, etc. to ?
         const mysqlQuery = text.replace(/\$\d+/g, '?');
-        const [rows] = await pool.query(mysqlQuery, params);
+        
+        // Ensure objects are stringified for JSON columns in MySQL
+        const safeParams = params.map(p => 
+            (p !== null && typeof p === 'object' && !(p instanceof Date)) ? JSON.stringify(p) : p
+        );
+
+        const [rows] = await pool.query(mysqlQuery, safeParams);
         return { rows, rowCount: rows.length };
     },
     pool

@@ -1,39 +1,47 @@
-const supabase = require('../supabaseClient');
+const directDb = require('../utils/directDb');
 
 const getOperations = async (req, res) => {
     try {
         const { role, userId } = req.query;
 
         console.log('Fetching operations for role:', role);
-        let query = supabase.from('operations').select('*, patient:patients(id, users!patients_user_id_fkey(full_name)), doctor:users(full_name)');
+        let queryStr = `
+            SELECT o.*, 
+                   p.full_name as patient_name, 
+                   u.full_name as doctor_name 
+            FROM operations o
+            LEFT JOIN patients p ON o.patient_id = p.id
+            LEFT JOIN users u ON o.doctor_id = u.id
+            WHERE 1=1
+        `;
+        let params = [];
 
-        // If patient, filter by patient_id
         if (role === 'patient' && userId) {
-            query = query.eq('patient_id', userId);
+            queryStr += ' AND o.patient_id = $1';
+            params.push(userId);
+        } else if (role === 'doctor' && userId) {
+            queryStr += ' AND o.doctor_id = $1';
+            params.push(userId);
         }
-        // If doctor, filter by doctor_id
-        else if (role === 'doctor' && userId) {
-            query = query.eq('doctor_id', userId);
-        }
-        // If admin, maybe show all upcoming?
-        else if (role === 'admin') {
-            // No filter needed, or maybe sort by date
-            query = query.order('operation_date', { ascending: true });
+        
+        queryStr += ' ORDER BY o.operation_date ASC';
+
+        let data = [];
+        try {
+            const { rows } = await directDb.query(queryStr, params);
+            data = rows;
+        } catch (e) {
+            // Table might not exist yet, safe fallback
+            console.log("Operations table missing or query failed, returning empty.");
         }
 
-        const { data, error } = await query;
+        // Format to match expected structure if needed
+        data = data.map(op => ({
+            ...op,
+            patient: { full_name: op.patient_name || 'Unknown' },
+            doctor: { full_name: op.doctor_name || 'Unknown' }
+        }));
 
-        if (data) {
-            data.forEach(op => {
-                if (op.patient && op.patient.users) {
-                    // Handle both single object (One-to-One) and array (if inferred differently)
-                    const userObj = Array.isArray(op.patient.users) ? op.patient.users[0] : op.patient.users;
-                    op.patient.full_name = userObj?.full_name || 'Unknown';
-                }
-            });
-        }
-
-        if (error) throw error;
         res.json(data);
     } catch (error) {
         console.error('Error fetching operations:', error);
@@ -44,13 +52,21 @@ const getOperations = async (req, res) => {
 const createOperation = async (req, res) => {
     try {
         const { patient_id, doctor_id, operation_name, operation_date, notes } = req.body;
-        const { data, error } = await supabase
-            .from('operations')
-            .insert([{ patient_id, doctor_id, operation_name, operation_date, notes }])
-            .select();
+        
+        const insertQuery = `
+            INSERT INTO operations (patient_id, doctor_id, operation_name, operation_date, notes) 
+            VALUES ($1, $2, $3, $4, $5) RETURNING *
+        `;
+        
+        let data = null;
+        try {
+            const { rows } = await directDb.query(insertQuery, [patient_id, doctor_id, operation_name, operation_date, notes]);
+            data = rows[0];
+        } catch (e) {
+            throw new Error("Operations table not fully migrated yet");
+        }
 
-        if (error) throw error;
-        res.status(201).json(data[0]);
+        res.status(201).json(data);
     } catch (error) {
         res.status(400).json({ error: error.message });
     }

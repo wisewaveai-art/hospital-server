@@ -49,17 +49,24 @@ class RAGService:
 
     def search(self, query: str, organization_id: str = "default", limit: int = 3):
         query_vector = self.encoder.encode(query).tolist()
-        results = self.client.search(
-            collection_name=self.collection_name,
-            query_vector=query_vector,
-            query_filter=models.Filter(
-                must=[
-                    models.FieldCondition(
-                        key="organization_id",
-                        match=models.MatchValue(value=organization_id),
-                    )
-                ]
-            ),
-            limit=limit
-        )
-        return [res.payload['text'] for res in results]
+        
+        # Try query_points (newer API) or fallback
+        if hasattr(self.client, 'query_points'):
+            results = self.client.query_points(
+                collection_name=self.collection_name,
+                query=query_vector,
+                query_filter=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="organization_id",
+                            match=models.MatchValue(value=organization_id),
+                        )
+                    ]
+                ),
+                limit=limit
+            ).points
+            return [res.payload['text'] for res in results]
+        else:
+            # Fallback if somehow using older/different interface that has search
+            # But the error indicated it didn't have search, so maybe it's 'search_points'?
+            raise Exception("Cannot find query_points on QdrantClient.")

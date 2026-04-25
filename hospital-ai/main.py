@@ -5,10 +5,20 @@ from typing import List, Optional, Dict
 from dotenv import load_dotenv
 import google.generativeai as genai
 from services.ai_engine import AIEngine
+from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
 app = FastAPI(title="WiseHospital AI Intelligence System", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 ai_engine = AIEngine()
 
 # --- Models ---

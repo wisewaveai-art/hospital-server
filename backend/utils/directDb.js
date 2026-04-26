@@ -12,7 +12,17 @@ module.exports = {
         );
 
         const [rows] = await pool.query(mysqlQuery, safeParams);
-        return { rows, rowCount: rows.length };
+        
+        // Handle MySQL/MariaDB ResultSetHeader for INSERT/UPDATE/DELETE
+        if (rows && !Array.isArray(rows)) {
+            return { 
+                rows: [], 
+                rowCount: rows.affectedRows || 0,
+                insertId: rows.insertId
+            };
+        }
+
+        return { rows: rows || [], rowCount: (rows || []).length };
     },
     pool
 };

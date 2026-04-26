@@ -52,10 +52,15 @@ exports.addRoom = async (req, res) => {
             return res.status(400).json({ error: 'Room number already exists' });
         }
 
-        const { rows } = await directDb.query(
+        await directDb.query(
             `INSERT INTO rooms (organization_id, room_number, room_type, price_per_day, status) 
-             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+             VALUES ($1, $2, $3, $4, $5)`,
             [orgId, room_number, type, charge_per_day, status || 'available']
+        );
+
+        const { rows } = await directDb.query(
+            'SELECT *, room_type as type, price_per_day as charge_per_day FROM rooms WHERE room_number = $1 AND organization_id = $2',
+            [room_number, orgId]
         );
 
         res.status(201).json(rows[0]);
@@ -72,9 +77,14 @@ exports.updateRoom = async (req, res) => {
         const orgId = req.organizationId;
         const { room_number, type, charge_per_day, status } = req.body;
 
-        const { rows } = await directDb.query(
-            `UPDATE rooms SET room_number = $1, room_type = $2, price_per_day = $3, status = $4 WHERE id = $5 AND organization_id = $6 RETURNING *`,
+        await directDb.query(
+            `UPDATE rooms SET room_number = $1, room_type = $2, price_per_day = $3, status = $4 WHERE id = $5 AND organization_id = $6`,
             [room_number, type, charge_per_day, status, id, orgId]
+        );
+
+        const { rows } = await directDb.query(
+            'SELECT *, room_type as type, price_per_day as charge_per_day FROM rooms WHERE id = $1 AND organization_id = $2',
+            [id, orgId]
         );
 
         res.json(rows[0]);
@@ -94,13 +104,18 @@ exports.allocateRoom = async (req, res) => {
         if (roomRows.length === 0) throw new Error('Room not found');
         if (roomRows[0].status === 'Occupied') return res.status(400).json({ error: 'Room is already occupied' });
 
-        const { rows: allocation } = await directDb.query(
+        await directDb.query(
             `INSERT INTO room_allocations (organization_id, room_id, patient_id, status, admission_date, guest_name, guest_contact, notes) 
-             VALUES ($1, $2, $3, 'active', NOW(), $4, $5, $6) RETURNING *`,
+             VALUES ($1, $2, $3, 'active', NOW(), $4, $5, $6)`,
             [orgId, room_id, patient_id, guest_name, guest_contact, notes]
         );
 
         await directDb.query('UPDATE rooms SET status = $1 WHERE id = $2 AND organization_id = $3', ['Occupied', room_id, orgId]);
+
+        const { rows: allocation } = await directDb.query(
+            'SELECT * FROM room_allocations WHERE room_id = $1 AND status = $2 AND organization_id = $3',
+            [room_id, 'active', orgId]
+        );
 
         res.status(201).json(allocation[0]);
     } catch (err) {
@@ -168,6 +183,7 @@ exports.getRoomHistory = async (req, res) => {
 // Delete room
 exports.deleteRoom = async (req, res) => {
     try {
+        const { id } = req.params;
         const orgId = req.organizationId;
         await directDb.query('DELETE FROM rooms WHERE id = $1 AND organization_id = $2', [id, orgId]);
         res.json({ message: 'Room deleted successfully' });

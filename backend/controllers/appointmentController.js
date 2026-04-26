@@ -15,9 +15,14 @@ exports.bookAppointment = async (req, res) => {
         const { patient_user_id, doctor_id, appointment_date, reason } = req.body;
         const orgId = req.organizationId;
 
-        const { rows } = await directDb.query(
-            'INSERT INTO appointments (organization_id, patient_user_id, doctor_id, appointment_date, reason, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+        await directDb.query(
+            'INSERT INTO appointments (organization_id, patient_user_id, doctor_id, appointment_date, reason, status) VALUES ($1, $2, $3, $4, $5, $6)',
             [orgId, patient_user_id, doctor_id, appointment_date, reason, 'scheduled']
+        );
+
+        const { rows } = await directDb.query(
+            'SELECT * FROM appointments WHERE patient_user_id = $1 AND appointment_date = $2 AND organization_id = $3',
+            [patient_user_id, appointment_date, orgId]
         );
 
         res.status(201).json(rows[0]);

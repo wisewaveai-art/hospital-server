@@ -208,10 +208,11 @@ exports.quickAddPatient = async (req, res) => {
             // For now, just use them.
         } else {
             // Create New User
-            const userRes = await directDb.query(
-                'INSERT INTO users (organization_id, full_name, email, phone, gender, role, password_hash) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+            await directDb.query(
+                'INSERT INTO users (organization_id, full_name, email, phone, gender, role, password_hash) VALUES ($1, $2, $3, $4, $5, $6, $7)',
                 [orgId, full_name, email, phone, gender, 'patient', 'no-password-login-via-otp']
             );
+            const userRes = await directDb.query('SELECT id FROM users WHERE email = $1 AND organization_id = $2', [email, orgId]);
             userId = userRes.rows[0].id;
         }
 
@@ -223,10 +224,11 @@ exports.quickAddPatient = async (req, res) => {
             patientId = existingProfile.rows[0].id;
         } else {
             // Create Patient Profile
-            const patientRes = await directDb.query(
-                'INSERT INTO patients (organization_id, user_id, patient_type) VALUES ($1, $2, $3) RETURNING id',
+            await directDb.query(
+                'INSERT INTO patients (organization_id, user_id, patient_type) VALUES ($1, $2, $3)',
                 [orgId, userId, 'Outpatient']
             );
+            const patientRes = await directDb.query('SELECT id FROM patients WHERE user_id = $1', [userId]);
             patientId = patientRes.rows[0].id;
         }
         

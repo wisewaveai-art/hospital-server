@@ -10,5 +10,6 @@ router.delete('/:id', patientController.deletePatient);
 router.post('/visit', patientController.addVisitRecord);
 router.post('/prescription', patientController.addPrescription);
 router.get('/id/:userId', patientController.getPatientIdByUserId);
+router.post('/quick-add', patientController.quickAddPatient);
 
 module.exports = router;

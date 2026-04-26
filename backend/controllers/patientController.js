@@ -190,3 +190,33 @@ exports.getPatientIdByUserId = async (req, res) => {
         res.status(500).json({ error: 'Server error' });
     }
 };
+
+exports.quickAddPatient = async (req, res) => {
+    try {
+        const { full_name, email, phone, gender } = req.body;
+        const orgId = req.organizationId;
+
+        // 1. Create User
+        const userRes = await directDb.query(
+            'INSERT INTO users (organization_id, full_name, email, phone, gender, role, password_hash) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+            [orgId, full_name, email, phone, gender, 'patient', 'no-password-login-via-otp']
+        );
+        const userId = userRes.rows[0].id;
+
+        // 2. Create Patient Profile
+        const patientRes = await directDb.query(
+            'INSERT INTO patients (organization_id, user_id, patient_type) VALUES ($1, $2, $3) RETURNING id',
+            [orgId, userId, 'Outpatient']
+        );
+        
+        res.json({ 
+            userId: userId, 
+            patientId: patientRes.rows[0].id,
+            full_name: full_name 
+        });
+    } catch (err) {
+        console.error('Quick Add Error:', err);
+        res.status(500).json({ error: 'Failed to add patient' });
+    }
+};
+

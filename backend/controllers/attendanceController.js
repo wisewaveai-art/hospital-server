@@ -129,7 +129,7 @@ exports.applyLeave = async (req, res) => {
         const orgId = req.organizationId;
 
         const { rows } = await directDb.query(
-            `INSERT INTO leave_requests (organization_id, user_id, from_date, to_date, leave_type, reason, status) 
+            `INSERT INTO leave_requests (organization_id, user_id, start_date, end_date, leave_type, reason, status) 
              VALUES ($1, $2, $3, $4, $5, $6, 'Pending') RETURNING *`,
             [orgId, userId, fromDate, toDate, leaveType, reason]
         );

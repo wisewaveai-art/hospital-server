@@ -69,11 +69,12 @@ exports.addRoom = async (req, res) => {
 exports.updateRoom = async (req, res) => {
     try {
         const { id } = req.params;
+        const orgId = req.organizationId;
         const { room_number, type, charge_per_day, status } = req.body;
 
         const { rows } = await directDb.query(
-            `UPDATE rooms SET room_number = $1, room_type = $2, price_per_day = $3, status = $4 WHERE id = $5 RETURNING *`,
-            [room_number, type, charge_per_day, status, id]
+            `UPDATE rooms SET room_number = $1, room_type = $2, price_per_day = $3, status = $4 WHERE id = $5 AND organization_id = $6 RETURNING *`,
+            [room_number, type, charge_per_day, status, id, orgId]
         );
 
         res.json(rows[0]);
@@ -89,7 +90,7 @@ exports.allocateRoom = async (req, res) => {
         const { room_id, patient_id, guest_name, guest_contact, notes } = req.body;
         const orgId = req.organizationId;
 
-        const { rows: roomRows } = await directDb.query('SELECT status FROM rooms WHERE id = $1', [room_id]);
+        const { rows: roomRows } = await directDb.query('SELECT status FROM rooms WHERE id = $1 AND organization_id = $2', [room_id, orgId]);
         if (roomRows.length === 0) throw new Error('Room not found');
         if (roomRows[0].status === 'Occupied') return res.status(400).json({ error: 'Room is already occupied' });
 
@@ -99,7 +100,7 @@ exports.allocateRoom = async (req, res) => {
             [orgId, room_id, patient_id]
         );
 
-        await directDb.query('UPDATE rooms SET status = $1 WHERE id = $2', ['Occupied', room_id]);
+        await directDb.query('UPDATE rooms SET status = $1 WHERE id = $2 AND organization_id = $3', ['Occupied', room_id, orgId]);
 
         res.status(201).json(allocation[0]);
     } catch (err) {
@@ -112,13 +113,14 @@ exports.allocateRoom = async (req, res) => {
 exports.dischargeRoom = async (req, res) => {
     try {
         const { room_id, allocation_id } = req.body;
+        const orgId = req.organizationId;
 
         let targetAllocId = allocation_id;
 
         if (!targetAllocId && room_id) {
             const { rows } = await directDb.query(
-                'SELECT id FROM room_allocations WHERE room_id = $1 AND status = $2',
-                [room_id, 'active']
+                'SELECT id FROM room_allocations WHERE room_id = $1 AND status = $2 AND organization_id = $3',
+                [room_id, 'active', orgId]
             );
             if (rows.length > 0) targetAllocId = rows[0].id;
         }
@@ -126,11 +128,11 @@ exports.dischargeRoom = async (req, res) => {
         if (!targetAllocId) return res.status(404).json({ error: 'No active allocation found' });
 
         await directDb.query(
-            'UPDATE room_allocations SET status = $1, discharge_date = NOW() WHERE id = $2',
-            ['discharged', targetAllocId]
+            'UPDATE room_allocations SET status = $1, discharge_date = NOW() WHERE id = $2 AND organization_id = $3',
+            ['discharged', targetAllocId, orgId]
         );
 
-        await directDb.query('UPDATE rooms SET status = $1 WHERE id = $2', ['Available', room_id]);
+        await directDb.query('UPDATE rooms SET status = $1 WHERE id = $2 AND organization_id = $3', ['Available', room_id, orgId]);
 
         res.json({ message: 'Discharged successfully' });
     } catch (err) {
@@ -143,14 +145,15 @@ exports.dischargeRoom = async (req, res) => {
 exports.getRoomHistory = async (req, res) => {
     try {
         const { id } = req.params; // Room ID
+        const orgId = req.organizationId;
         const { rows } = await directDb.query(`
             SELECT ra.*, u.full_name, u.phone, u.email
             FROM room_allocations ra
             JOIN patients p ON ra.patient_id = p.id
             JOIN users u ON p.user_id = u.id
-            WHERE ra.room_id = $1
+            WHERE ra.room_id = $1 AND ra.organization_id = $2
             ORDER BY ra.admission_date DESC
-        `, [id]);
+        `, [id, orgId]);
 
         res.json(rows.map(r => ({
             ...r,
@@ -165,8 +168,8 @@ exports.getRoomHistory = async (req, res) => {
 // Delete room
 exports.deleteRoom = async (req, res) => {
     try {
-        const { id } = req.params;
-        await directDb.query('DELETE FROM rooms WHERE id = $1', [id]);
+        const orgId = req.organizationId;
+        await directDb.query('DELETE FROM rooms WHERE id = $1 AND organization_id = $2', [id, orgId]);
         res.json({ message: 'Room deleted successfully' });
     } catch (err) {
         console.error('Error deleting room:', err);

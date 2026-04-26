@@ -73,14 +73,14 @@ exports.createPatientProfile = async (req, res) => {
 
 exports.getPatientDetails = async (req, res) => {
     try {
-        const { id } = req.params;
+        const orgId = req.organizationId;
         const query = `
             SELECT u.*, p.*, p.id as patient_profile_id
             FROM users u
             LEFT JOIN patients p ON u.id = p.user_id
-            WHERE p.id = $1
+            WHERE p.id = $1 AND u.organization_id = $2
         `;
-        const { rows } = await directDb.query(query, [id]);
+        const { rows } = await directDb.query(query, [id, orgId]);
         if (rows.length === 0) return res.status(404).json({ error: 'Patient not found' });
         res.json(rows[0]);
     } catch (err) {
@@ -96,10 +96,11 @@ exports.updatePatient = async (req, res) => {
             blood_group, dob, emergency_contact, medical_history, patient_type, assigned_doctor_id
         } = req.body;
 
+        const orgId = req.organizationId;
         // 1. Update users table
         await directDb.query(
-            'UPDATE users SET full_name=$1, email=$2, phone=$3, address=$4 WHERE id=$5',
-            [full_name, email, phone, address, id]
+            'UPDATE users SET full_name=$1, email=$2, phone=$3, address=$4 WHERE id=$5 AND organization_id=$6',
+            [full_name, email, phone, address, id, orgId]
         );
 
         // 2. update or insert into patients table
@@ -133,7 +134,8 @@ exports.updatePatient = async (req, res) => {
 exports.deletePatient = async (req, res) => {
     try {
         const { id } = req.params; // user id
-        await directDb.query('DELETE FROM users WHERE id=$1', [id]);
+        const orgId = req.organizationId;
+        await directDb.query('DELETE FROM users WHERE id=$1 AND organization_id=$2', [id, orgId]);
         res.json({ message: 'Patient deleted' });
     } catch(err) {
         res.status(500).json({error: 'Failed to delete'});

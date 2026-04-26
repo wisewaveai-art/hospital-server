@@ -87,7 +87,7 @@ exports.addPayment = async (req, res) => {
         );
 
         if (rows[0]) {
-            await directDb.query(`UPDATE invoices SET status = 'Paid' WHERE id = $1`, [invoice_id]);
+            await directDb.query(`UPDATE invoices SET status = 'Paid' WHERE id = $1 AND organization_id = $2`, [invoice_id, orgId]);
         }
 
         res.status(201).json(rows[0]);

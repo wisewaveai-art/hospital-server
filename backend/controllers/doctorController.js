@@ -55,16 +55,17 @@ exports.updateDoctor = async (req, res) => {
             department, designation, specialization, bio, availability
         } = req.body;
 
+        const orgId = req.organizationId;
         // 1. Update Users Table
         await directDb.query(
-            'UPDATE users SET full_name=$1, email=$2, phone=$3, address=$4, gender=$5 WHERE id=$6',
-            [full_name, email, phone, address, gender, id]
+            'UPDATE users SET full_name=$1, email=$2, phone=$3, address=$4, gender=$5 WHERE id=$6 AND organization_id=$7',
+            [full_name, email, phone, address, gender, id, orgId]
         );
 
         // 2. Update Doctors Table
         await directDb.query(
-            'UPDATE doctors SET department=$1, designation=$2, specialization=$3, bio=$4, availability=$5 WHERE user_id=$6',
-            [department, designation, specialization, bio, availability, id]
+            'UPDATE doctors SET department=$1, designation=$2, specialization=$3, bio=$4, availability=$5 WHERE user_id=$6 AND organization_id=$7',
+            [department, designation, specialization, bio, availability, id, orgId]
         );
 
         res.json({ message: 'Doctor profile updated successfully' });

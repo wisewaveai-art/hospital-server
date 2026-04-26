@@ -30,6 +30,7 @@ exports.bookAppointment = async (req, res) => {
 exports.getMyAppointments = async (req, res) => {
     try {
         const { userId } = req.params; 
+        const orgId = req.organizationId;
 
         let queryStr = `
             SELECT a.*, 
@@ -38,11 +39,11 @@ exports.getMyAppointments = async (req, res) => {
             FROM appointments a
             LEFT JOIN doctors d ON a.doctor_id = d.id
             LEFT JOIN users u ON d.user_id = u.id
-            WHERE a.patient_user_id = $1
+            WHERE a.patient_user_id = $1 AND a.organization_id = $2
             ORDER BY a.appointment_date ASC
         `;
         
-        const rows = await safeQuery(queryStr, [userId]);
+        const rows = await safeQuery(queryStr, [userId, orgId]);
 
         const formatted = rows.map(r => {
             const { doc_id, specialization, doctor_name, ...app } = r;
@@ -61,6 +62,7 @@ exports.getMyAppointments = async (req, res) => {
 
 exports.getAllAppointments = async (req, res) => {
     try {
+        const orgId = req.organizationId;
         let queryStr = `
             SELECT a.*, 
                    p.full_name as patient_name,
@@ -70,10 +72,11 @@ exports.getAllAppointments = async (req, res) => {
             LEFT JOIN users p ON a.patient_user_id = p.id
             LEFT JOIN doctors d ON a.doctor_id = d.id
             LEFT JOIN users u ON d.user_id = u.id
+            WHERE a.organization_id = $1
             ORDER BY a.appointment_date DESC
         `;
         
-        const rows = await safeQuery(queryStr);
+        const rows = await safeQuery(queryStr, [orgId]);
 
         const formatted = rows.map(r => {
             const { patient_name, doc_profile_id, doctor_name, ...app } = r;
@@ -102,16 +105,17 @@ exports.getDoctorAppointments = async (req, res) => {
         
         const doctorId = docRes.rows[0].id;
 
+        const orgId = req.organizationId;
         let queryStr = `
             SELECT a.*, 
                    p.full_name, p.email, p.phone
             FROM appointments a
             LEFT JOIN users p ON a.patient_user_id = p.id
-            WHERE a.doctor_id = $1
+            WHERE a.doctor_id = $1 AND a.organization_id = $2
             ORDER BY a.appointment_date ASC
         `;
         
-        const rows = await safeQuery(queryStr, [doctorId]);
+        const rows = await safeQuery(queryStr, [doctorId, orgId]);
 
         const formatted = rows.map(r => {
             const { full_name, email, phone, ...app } = r;

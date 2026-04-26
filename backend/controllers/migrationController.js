@@ -72,6 +72,13 @@ exports.runMigration = async (req, res) => {
             } catch(e) {
                 // Maybe already correct or other issue
             }
+
+            // Patch doctors and staff for HR columns
+            const hrTables = ['doctors', 'staff'];
+            for (const table of hrTables) {
+                try { await setupConn.query(`ALTER TABLE ${table} ADD COLUMN base_salary DECIMAL(12,2) DEFAULT 0.00`); } catch(e) {}
+                try { await setupConn.query(`ALTER TABLE ${table} ADD COLUMN bank_account_details TEXT`); } catch(e) {}
+            }
         };
 
         await patchColumns();

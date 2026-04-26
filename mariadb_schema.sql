@@ -297,3 +297,18 @@ CREATE TABLE IF NOT EXISTS diagnostic_labs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
 );
+
+-- Prescriptions
+CREATE TABLE IF NOT EXISTS prescriptions (
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    organization_id CHAR(36),
+    visit_id CHAR(36),
+    medicine_id CHAR(36),
+    dosage VARCHAR(255),
+    duration VARCHAR(100),
+    quantity INT DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY (visit_id) REFERENCES patient_visits(id) ON DELETE CASCADE,
+    FOREIGN KEY (medicine_id) REFERENCES medicines(id) ON DELETE CASCADE
+);

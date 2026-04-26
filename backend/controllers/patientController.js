@@ -165,7 +165,21 @@ exports.addVisitRecord = async (req, res) => {
     }
 };
 
-exports.addPrescription = async (req, res) => res.json({});
+exports.addPrescription = async (req, res) => {
+    try {
+        const orgId = req.organizationId;
+        const { visit_id, medicine_id, dosage, duration, quantity } = req.body;
+        const query = `
+            INSERT INTO prescriptions (organization_id, visit_id, medicine_id, dosage, duration, quantity)
+            VALUES ($1, $2, $3, $4, $5, $6) RETURNING *
+        `;
+        const { rows } = await directDb.query(query, [orgId, visit_id, medicine_id, dosage, duration, quantity]);
+        res.json(rows[0]);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to add prescription' });
+    }
+};
 exports.getPatientIdByUserId = async (req, res) => {
     try {
         const { userId } = req.params;

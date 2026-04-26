@@ -1,9 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const aiController = require('../controllers/aiController');
+const hospitalAIController = require('../controllers/hospitalAIController');
 
-// Define API route for AI prediction
-router.post('/predict', aiController.predictDisease);
-router.post('/track-flow', aiController.trackFlow);
+router.get('/predict/:patientId', hospitalAIController.getPatientPrediction);
 
 module.exports = router;

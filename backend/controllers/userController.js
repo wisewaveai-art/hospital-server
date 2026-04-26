@@ -34,9 +34,9 @@ exports.updateUserRole = async (req, res) => {
                 await directDb.query('INSERT INTO staff (user_id, organization_id, full_name, designation) VALUES ($1, $2, $3, $4)', [id, orgId, user.full_name, role]);
             }
         } else if (role === 'patient') {
-            const { rowCount } = await directDb.query('SELECT id FROM patients WHERE user_id = $1', [id]);
-            if (rowCount === 0) {
-                await directDb.query('INSERT INTO patients (user_id, organization_id, full_name) VALUES ($1, $2, $3)', [id, orgId, user.full_name]);
+            const { rows } = await directDb.query('SELECT id FROM patients WHERE user_id = $1', [id]);
+            if (rows.length === 0) {
+                await directDb.query('INSERT INTO patients (user_id, organization_id, patient_type) VALUES ($1, $2, $3)', [id, orgId, 'Outpatient']);
             }
         }
 
@@ -138,11 +138,11 @@ exports.createUser = async (req, res) => {
 
         // Ensure secondary profile creation (doctor, staff, etc.)
         if (role === 'doctor') {
-            await directDb.query('INSERT INTO doctors (user_id, organization_id, full_name) VALUES ($1, $2, $3)', [newUser.id, orgId, full_name]);
+            await directDb.query('INSERT INTO doctors (user_id, organization_id) VALUES ($1, $2)', [newUser.id, orgId]);
         } else if (role === 'staff' || role === 'nurse') {
-            await directDb.query('INSERT INTO staff (user_id, organization_id, full_name) VALUES ($1, $2, $3)', [newUser.id, orgId, full_name]);
+            await directDb.query('INSERT INTO staff (user_id, organization_id) VALUES ($1, $2)', [newUser.id, orgId]);
         } else if (role === 'patient') {
-            await directDb.query('INSERT INTO patients (user_id, organization_id, full_name) VALUES ($1, $2, $3)', [newUser.id, orgId, full_name]);
+            await directDb.query('INSERT INTO patients (user_id, organization_id, patient_type) VALUES ($1, $2, $3)', [newUser.id, orgId, 'Outpatient']);
         }
 
         res.status(201).json({ message: 'User created successfully', user: newUser });

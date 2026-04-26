@@ -12,4 +12,7 @@ router.get('/theme', settingsController.getTheme);
 router.get('/themes/presets', settingsController.getPresets);
 router.post('/theme', settingsController.updateTheme);
 
+router.get('/:key', settingsController.getByKey);
+router.post('/:key', settingsController.updateByKey);
+
 module.exports = router;

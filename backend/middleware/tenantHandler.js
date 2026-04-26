@@ -31,6 +31,11 @@ const tenantHandler = async (req, res, next) => {
             }
         }
 
+        // Fallback to default org on localhost if no slug provided
+        if (!organizationId && (req.get('host').includes('localhost') || req.get('host').includes('127.0.0.1'))) {
+            organizationId = '00000000-0000-0000-0000-000000000000';
+        }
+
         req.organizationId = organizationId;
         next();
     } catch (err) {

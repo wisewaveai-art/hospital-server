@@ -149,3 +149,53 @@ exports.updateTheme = async (req, res) => {
         res.status(500).json({ error: 'Server error updating theme' });
     }
 };
+
+exports.getByKey = async (req, res) => {
+    try {
+        const { key } = req.params;
+        const orgId = req.organizationId;
+        
+        const result = await directDb.query(
+            'SELECT value FROM settings WHERE organization_id = $1 AND key_name = $2',
+            [orgId, key]
+        );
+        
+        if (result.rowCount === 0) {
+            return res.json({});
+        }
+        res.json(result.rows[0].value);
+    } catch (err) {
+        console.error('Get Setting By Key Error:', err);
+        res.status(500).json({ error: 'Server error fetching setting' });
+    }
+};
+
+exports.updateByKey = async (req, res) => {
+    try {
+        const { key } = req.params;
+        const { value } = req.body;
+        const orgId = req.organizationId;
+
+        const check = await directDb.query(
+            'SELECT id FROM settings WHERE organization_id = $1 AND key_name = $2',
+            [orgId, key]
+        );
+
+        if (check.rowCount === 0) {
+            await directDb.query(
+                'INSERT INTO settings (organization_id, key_name, value) VALUES ($1, $2, $3)',
+                [orgId, key, value]
+            );
+        } else {
+            await directDb.query(
+                'UPDATE settings SET value = $1 WHERE organization_id = $2 AND key_name = $3',
+                [value, orgId, key]
+            );
+        }
+        
+        res.json({ success: true, message: 'Settings saved' });
+    } catch (err) {
+        console.error('Update Setting By Key Error:', err);
+        res.status(500).json({ error: 'Server error updating setting' });
+    }
+};

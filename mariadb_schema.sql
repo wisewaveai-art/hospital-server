@@ -78,6 +78,8 @@ CREATE TABLE IF NOT EXISTS doctors (
     website_url VARCHAR(255),
     department VARCHAR(255),
     designation VARCHAR(255),
+    base_salary DECIMAL(12,2) DEFAULT 0.00,
+    bank_account_details TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -92,6 +94,8 @@ CREATE TABLE IF NOT EXISTS staff (
     shift_start VARCHAR(50),
     shift_end VARCHAR(50),
     joined_date DATE,
+    base_salary DECIMAL(12,2) DEFAULT 0.00,
+    bank_account_details TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -312,3 +316,39 @@ CREATE TABLE IF NOT EXISTS prescriptions (
     FOREIGN KEY (visit_id) REFERENCES patient_visits(id) ON DELETE CASCADE,
     FOREIGN KEY (medicine_id) REFERENCES medicines(id) ON DELETE CASCADE
 );
+
+-- HR: Leave Requests
+CREATE TABLE IF NOT EXISTS leave_requests (
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    organization_id CHAR(36),
+    user_id CHAR(36),
+    leave_type VARCHAR(50),
+    start_date DATE,
+    end_date DATE,
+    reason TEXT,
+    status VARCHAR(50) DEFAULT 'pending',
+    approved_by CHAR(36),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- HR: Payroll
+CREATE TABLE IF NOT EXISTS payroll (
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    organization_id CHAR(36),
+    user_id CHAR(36),
+    salary_month VARCHAR(20),
+    base_salary DECIMAL(12,2) DEFAULT 0.00,
+    allowances DECIMAL(12,2) DEFAULT 0.00,
+    deductions DECIMAL(12,2) DEFAULT 0.00,
+    net_salary DECIMAL(12,2) DEFAULT 0.00,
+    payment_status VARCHAR(50) DEFAULT 'pending',
+    payment_date DATE,
+    transaction_id VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+

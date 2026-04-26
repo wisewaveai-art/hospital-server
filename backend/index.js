@@ -84,6 +84,9 @@ app.use('/api/ambulances', require('./routes/ambulanceRoutes'));
 app.use('/api/diagnostic-labs', require('./routes/diagnosticLabRoutes'));
 
 
+const hrRoutes = require('./routes/hr');
+app.use('/api/hr', hrRoutes);
+
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });

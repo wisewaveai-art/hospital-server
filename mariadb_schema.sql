@@ -267,3 +267,18 @@ CREATE TABLE IF NOT EXISTS instruments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
 );
+
+-- Ambulances
+CREATE TABLE IF NOT EXISTS ambulances (
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    organization_id CHAR(36),
+    vehicle_number VARCHAR(50) NOT NULL,
+    vehicle_model VARCHAR(100),
+    driver_name VARCHAR(255),
+    driver_phone VARCHAR(50),
+    ambulance_type VARCHAR(50) DEFAULT 'Basic',
+    status VARCHAR(50) DEFAULT 'available',
+    note TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+);

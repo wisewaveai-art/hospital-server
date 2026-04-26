@@ -80,6 +80,7 @@ app.use('/api/operations', require('./routes/operationsRoutes'));
 app.use('/api/billing', require('./routes/billing'));
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 app.use('/api/ai', require('./routes/aiRoutes'));
+app.use('/api/ambulances', require('./routes/ambulanceRoutes'));
 
 
 app.listen(PORT, () => {

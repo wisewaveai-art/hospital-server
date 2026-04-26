@@ -79,6 +79,10 @@ exports.runMigration = async (req, res) => {
                 try { await setupConn.query(`ALTER TABLE ${table} ADD COLUMN base_salary DECIMAL(12,2) DEFAULT 0.00`); } catch(e) {}
                 try { await setupConn.query(`ALTER TABLE ${table} ADD COLUMN bank_account_details TEXT`); } catch(e) {}
             }
+
+            // Patch room_allocations for guest info
+            try { await setupConn.query(`ALTER TABLE room_allocations ADD COLUMN guest_name VARCHAR(255)`); } catch(e) {}
+            try { await setupConn.query(`ALTER TABLE room_allocations ADD COLUMN guest_contact VARCHAR(50)`); } catch(e) {}
         };
 
         await patchColumns();

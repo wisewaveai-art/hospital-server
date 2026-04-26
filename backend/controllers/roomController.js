@@ -7,7 +7,7 @@ exports.getAllRooms = async (req, res) => {
         
         // Fetch rooms and their active allocations in a single query or separate
         const { rows: rooms } = await directDb.query(
-            'SELECT * FROM rooms WHERE organization_id = $1 ORDER BY room_number ASC',
+            'SELECT *, room_type as type, price_per_day as charge_per_day FROM rooms WHERE organization_id = $1 ORDER BY room_number ASC',
             [orgId]
         );
 
@@ -95,9 +95,9 @@ exports.allocateRoom = async (req, res) => {
         if (roomRows[0].status === 'Occupied') return res.status(400).json({ error: 'Room is already occupied' });
 
         const { rows: allocation } = await directDb.query(
-            `INSERT INTO room_allocations (organization_id, room_id, patient_id, status, admission_date) 
-             VALUES ($1, $2, $3, 'active', NOW()) RETURNING *`,
-            [orgId, room_id, patient_id]
+            `INSERT INTO room_allocations (organization_id, room_id, patient_id, status, admission_date, guest_name, guest_contact, notes) 
+             VALUES ($1, $2, $3, 'active', NOW(), $4, $5, $6) RETURNING *`,
+            [orgId, room_id, patient_id, guest_name, guest_contact, notes]
         );
 
         await directDb.query('UPDATE rooms SET status = $1 WHERE id = $2 AND organization_id = $3', ['Occupied', room_id, orgId]);

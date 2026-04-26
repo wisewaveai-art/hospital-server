@@ -123,13 +123,24 @@ class AIEngine:
         Given symptoms: {", ".join(getattr(data, 'symptoms', []))}
         Age: {getattr(data, 'patient_age', 'N/A')}, Gender: {getattr(data, 'patient_gender', 'N/A')}
         
-        Provide a ranked list of differential diagnoses (top 5).
-        For each diagnosis, provide:
-        - Probability percentage
-        - Recommended immediate test
-        - Rationale
+        Provide a ranked list of differential diagnoses (top 5) in STRICTOR JSON FORMAT.
+        Return ONLY a JSON array of objects. Each object MUST have:
+        - "disease": string name of condition
+        - "confidence": number (0-100)
+        - "rationale": string
+        
+        Example: [{"disease": "Condition Name", "confidence": 85, "rationale": "..."}]
         """
-        return {"differential_diagnosis": await self._prompt_hf(prompt)}
+        response_text = await self._prompt_hf(prompt)
+        try:
+            # Basic cleanup of AI response to find JSON
+            start = response_text.find('[')
+            end = response_text.rfind(']') + 1
+            if start != -1 and end != -1:
+                return json.loads(response_text[start:end])
+            return []
+        except:
+            return []
 
     async def triage_imaging(self, data):
         return {

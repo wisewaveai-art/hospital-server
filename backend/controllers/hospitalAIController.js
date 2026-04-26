@@ -106,3 +106,30 @@ exports.getPatientPrediction = async (req, res) => {
         res.status(500).json({ error: 'AI Analysis failed' });
     }
 };
+
+exports.handleGenericPredict = async (req, res) => {
+    try {
+        const { symptoms } = req.body;
+        
+        // Proxy call to AI Service
+        try {
+            const diagRes = await fetch(`${AI_SERVICE_URL}/diagnosis/differential`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    symptoms: symptoms.split('. '),
+                    patient_age: 30, // default
+                    patient_gender: 'Unknown'
+                })
+            });
+            const data = await diagRes.json();
+            // Wrap in 'predictions' key to match frontend expectation
+            res.json({ predictions: Array.isArray(data) ? data : [] });
+        } catch (e) {
+            res.json({ predictions: [] });
+        }
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Failed to process AI request' });
+    }
+};

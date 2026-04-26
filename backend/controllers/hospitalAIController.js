@@ -1,5 +1,4 @@
 const directDb = require('../utils/directDb');
-const axios = require('axios');
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 
@@ -56,12 +55,16 @@ exports.getPatientPrediction = async (req, res) => {
         // Call AI Service - Diagnosis Suggestion
         let diagnosisResponse;
         try {
-            const diagRes = await axios.post(`${AI_SERVICE_URL}/diagnosis/differential`, {
-                symptoms: symptoms.split('. '),
-                patient_age,
-                patient_gender
+            const diagRes = await fetch(`${AI_SERVICE_URL}/diagnosis/differential`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    symptoms: symptoms.split('. '),
+                    patient_age,
+                    patient_gender
+                })
             });
-            diagnosisResponse = diagRes.data;
+            diagnosisResponse = await diagRes.json();
         } catch (e) {
             diagnosisResponse = "AI Diagnosis service currently unavailable.";
         }
@@ -69,12 +72,16 @@ exports.getPatientPrediction = async (req, res) => {
         // Call AI Service - CDSS (Clinical Decision Support)
         let cdssResponse;
         try {
-            const cdssRes = await axios.post(`${AI_SERVICE_URL}/cdss/analyze`, {
-                patient_history: medical_history + '. Previous diagnosis: ' + visits.map(v => v.diagnosis).join(', '),
-                current_meds: meds.map(m => m.medicine_name),
-                vitals: {} // We don't have vitals yet
+            const cdssRes = await fetch(`${AI_SERVICE_URL}/cdss/analyze`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    patient_history: medical_history + '. Previous diagnosis: ' + visits.map(v => v.diagnosis).join(', '),
+                    current_meds: meds.map(m => m.medicine_name),
+                    vitals: {} 
+                })
             });
-            cdssResponse = cdssRes.data;
+            cdssResponse = await cdssRes.json();
         } catch (e) {
             cdssResponse = "AI CDSS service currently unavailable.";
         }

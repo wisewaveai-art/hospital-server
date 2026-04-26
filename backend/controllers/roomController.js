@@ -1,30 +1,32 @@
-const supabase = require('../supabaseClient');
+const directDb = require('../utils/directDb');
 
 // Get all rooms (with current active allocation if any)
 exports.getAllRooms = async (req, res) => {
     try {
-        const { data: rooms, error } = await supabase
-            .from('rooms')
-            .select(`
-                *,
-                room_allocations!left (
-                    id, patient_id, admission_date, status, notes, guest_name, guest_contact,
-                    patients (
-                        users:users!patients_user_id_fkey (full_name, phone)
-                    )
-                )
-            `)
-            .order('room_number', { ascending: true });
+        const orgId = req.organizationId;
+        
+        // Fetch rooms and their active allocations in a single query or separate
+        const { rows: rooms } = await directDb.query(
+            'SELECT * FROM rooms WHERE organization_id = $1 ORDER BY room_number ASC',
+            [orgId]
+        );
 
-        if (error) throw error;
+        const { rows: allocations } = await directDb.query(`
+            SELECT ra.*, u.full_name as patient_name, u.phone as patient_phone
+            FROM room_allocations ra
+            JOIN patients p ON ra.patient_id = p.id
+            JOIN users u ON p.user_id = u.id
+            WHERE ra.organization_id = $1 AND ra.status = 'active'
+        `, [orgId]);
 
-        // Filter allocations to only show the 'active' one in the list
         const enrichedRooms = rooms.map(room => {
-            const activeAllocation = room.room_allocations?.find(a => a.status === 'active');
+            const activeAllocation = allocations.find(a => a.room_id === room.id);
             return {
                 ...room,
-                active_allocation: activeAllocation || null,
-                room_allocations: undefined // Remove the array to avoid clutter
+                active_allocation: activeAllocation ? {
+                    ...activeAllocation,
+                    patients: { users: { full_name: activeAllocation.patient_name, phone: activeAllocation.patient_phone } }
+                } : null
             };
         });
 
@@ -39,35 +41,24 @@ exports.getAllRooms = async (req, res) => {
 exports.addRoom = async (req, res) => {
     try {
         const { room_number, type, charge_per_day, status, contact_number } = req.body;
+        const orgId = req.organizationId;
 
-        // Check if room number exists
-        const { data: existing } = await supabase
-            .from('rooms')
-            .select('id')
-            .eq('room_number', room_number)
-            .single();
+        const { rows: existing } = await directDb.query(
+            'SELECT id FROM rooms WHERE room_number = $1 AND organization_id = $2',
+            [room_number, orgId]
+        );
 
-        if (existing) {
+        if (existing.length > 0) {
             return res.status(400).json({ error: 'Room number already exists' });
         }
 
-        const payload = {
-            room_number,
-            type,
-            price_per_day: charge_per_day,
-            status,
-            contact_number
-        };
-        console.log('Processed Room Payload:', payload);
+        const { rows } = await directDb.query(
+            `INSERT INTO rooms (organization_id, room_number, room_type, price_per_day, status) 
+             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+            [orgId, room_number, type, charge_per_day, status || 'available']
+        );
 
-        const { data, error } = await supabase
-            .from('rooms')
-            .insert([payload])
-            .select()
-            .single();
-
-        if (error) throw error;
-        res.status(201).json(data);
+        res.status(201).json(rows[0]);
     } catch (err) {
         console.error('Error adding room:', err);
         res.status(500).json({ error: 'Server error', details: err.message });
@@ -78,22 +69,14 @@ exports.addRoom = async (req, res) => {
 exports.updateRoom = async (req, res) => {
     try {
         const { id } = req.params;
-        const { charge_per_day, ...otherUpdates } = req.body;
+        const { room_number, type, charge_per_day, status } = req.body;
 
-        const updates = {
-            ...otherUpdates,
-            ...(charge_per_day && { price_per_day: charge_per_day })
-        };
+        const { rows } = await directDb.query(
+            `UPDATE rooms SET room_number = $1, room_type = $2, price_per_day = $3, status = $4 WHERE id = $5 RETURNING *`,
+            [room_number, type, charge_per_day, status, id]
+        );
 
-        const { data, error } = await supabase
-            .from('rooms')
-            .update(updates)
-            .eq('id', id)
-            .select()
-            .single();
-
-        if (error) throw error;
-        res.json(data);
+        res.json(rows[0]);
     } catch (err) {
         console.error('Error updating room:', err);
         res.status(500).json({ error: 'Server error' });
@@ -104,38 +87,21 @@ exports.updateRoom = async (req, res) => {
 exports.allocateRoom = async (req, res) => {
     try {
         const { room_id, patient_id, guest_name, guest_contact, notes } = req.body;
+        const orgId = req.organizationId;
 
-        // 1. Check if room is available
-        const { data: room, error: roomError } = await supabase
-            .from('rooms')
-            .select('status')
-            .eq('id', room_id)
-            .single();
+        const { rows: roomRows } = await directDb.query('SELECT status FROM rooms WHERE id = $1', [room_id]);
+        if (roomRows.length === 0) throw new Error('Room not found');
+        if (roomRows[0].status === 'Occupied') return res.status(400).json({ error: 'Room is already occupied' });
 
-        if (roomError || !room) throw new Error('Room not found');
-        if (room.status === 'Occupied') return res.status(400).json({ error: 'Room is already occupied' });
+        const { rows: allocation } = await directDb.query(
+            `INSERT INTO room_allocations (organization_id, room_id, patient_id, status, admission_date) 
+             VALUES ($1, $2, $3, 'active', NOW()) RETURNING *`,
+            [orgId, room_id, patient_id]
+        );
 
-        // 2. Create Allocation
-        const { data: allocation, error: allocError } = await supabase
-            .from('room_allocations')
-            .insert([{
-                room_id,
-                patient_id,
-                guest_name,
-                guest_contact,
-                notes: notes, // Check-in notes
-                status: 'active',
-                admission_date: new Date()
-            }])
-            .select()
-            .single();
+        await directDb.query('UPDATE rooms SET status = $1 WHERE id = $2', ['Occupied', room_id]);
 
-        if (allocError) throw allocError;
-
-        // 3. Update Room Status
-        await supabase.from('rooms').update({ status: 'Occupied' }).eq('id', room_id);
-
-        res.status(201).json(allocation);
+        res.status(201).json(allocation[0]);
     } catch (err) {
         console.error('Error allocating room:', err);
         res.status(500).json({ error: 'Server error', details: err.message });
@@ -145,35 +111,26 @@ exports.allocateRoom = async (req, res) => {
 // Discharge Room (Check Out)
 exports.dischargeRoom = async (req, res) => {
     try {
-        const { room_id, allocation_id } = req.body; // Can pass either. If room_id, find active allocation.
+        const { room_id, allocation_id } = req.body;
 
         let targetAllocId = allocation_id;
 
         if (!targetAllocId && room_id) {
-            const { data: active } = await supabase
-                .from('room_allocations')
-                .select('id')
-                .eq('room_id', room_id)
-                .eq('status', 'active')
-                .single();
-            if (active) targetAllocId = active.id;
+            const { rows } = await directDb.query(
+                'SELECT id FROM room_allocations WHERE room_id = $1 AND status = $2',
+                [room_id, 'active']
+            );
+            if (rows.length > 0) targetAllocId = rows[0].id;
         }
 
         if (!targetAllocId) return res.status(404).json({ error: 'No active allocation found' });
 
-        // 1. Update Allocation
-        const { error: allocError } = await supabase
-            .from('room_allocations')
-            .update({
-                status: 'discharged',
-                discharge_date: new Date()
-            })
-            .eq('id', targetAllocId);
+        await directDb.query(
+            'UPDATE room_allocations SET status = $1, discharge_date = NOW() WHERE id = $2',
+            ['discharged', targetAllocId]
+        );
 
-        if (allocError) throw allocError;
-
-        // 2. Update Room Status
-        await supabase.from('rooms').update({ status: 'Available' }).eq('id', room_id); // Or 'Cleaning' if preferred
+        await directDb.query('UPDATE rooms SET status = $1 WHERE id = $2', ['Available', room_id]);
 
         res.json({ message: 'Discharged successfully' });
     } catch (err) {
@@ -186,19 +143,19 @@ exports.dischargeRoom = async (req, res) => {
 exports.getRoomHistory = async (req, res) => {
     try {
         const { id } = req.params; // Room ID
-        const { data, error } = await supabase
-            .from('room_allocations')
-            .select(`
-                *,
-                patients (
-                    users:users!patients_user_id_fkey (full_name, phone, email)
-                )
-            `)
-            .eq('room_id', id)
-            .order('admission_date', { ascending: false });
+        const { rows } = await directDb.query(`
+            SELECT ra.*, u.full_name, u.phone, u.email
+            FROM room_allocations ra
+            JOIN patients p ON ra.patient_id = p.id
+            JOIN users u ON p.user_id = u.id
+            WHERE ra.room_id = $1
+            ORDER BY ra.admission_date DESC
+        `, [id]);
 
-        if (error) throw error;
-        res.json(data);
+        res.json(rows.map(r => ({
+            ...r,
+            patients: { users: { full_name: r.full_name, phone: r.phone, email: r.email } }
+        })));
     } catch (err) {
         console.error('Error fetching room history:', err);
         res.status(500).json({ error: 'Server error' });
@@ -209,12 +166,7 @@ exports.getRoomHistory = async (req, res) => {
 exports.deleteRoom = async (req, res) => {
     try {
         const { id } = req.params;
-        const { error } = await supabase
-            .from('rooms')
-            .delete()
-            .eq('id', id);
-
-        if (error) throw error;
+        await directDb.query('DELETE FROM rooms WHERE id = $1', [id]);
         res.json({ message: 'Room deleted successfully' });
     } catch (err) {
         console.error('Error deleting room:', err);

@@ -1,5 +1,3 @@
-const supabase = require('../supabaseClient');
-const { tenantQuery, withOrgData } = require('../utils/tenantQuery');
 const bcrypt = require('bcryptjs');
 const directDb = require('../utils/directDb');
 

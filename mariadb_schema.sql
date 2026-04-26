@@ -352,3 +352,20 @@ CREATE TABLE IF NOT EXISTS payroll (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+-- Attendance Tracking
+CREATE TABLE IF NOT EXISTS attendance (
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    organization_id CHAR(36),
+    user_id CHAR(36),
+    date DATE NOT NULL,
+    check_in_time DATETIME,
+    check_out_time DATETIME,
+    shift VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'Present',
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY (user_id, date)
+);
+

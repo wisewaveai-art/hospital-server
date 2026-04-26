@@ -66,3 +66,25 @@ exports.predictDisease = async (req, res) => {
     res.status(500).json({ error: 'Failed to predict disease' });
   }
 };
+
+exports.trackFlow = async (req, res) => {
+    try {
+        const historyObj = req.body;
+        
+        const response = await fetch("http://localhost:8000/diagnosis/track-flow", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(historyObj)
+        });
+
+        if (!response.ok) {
+           return res.status(response.status).json({ error: 'AI Diagnosis engine track flow failed' });
+        }
+
+        const data = await response.json();
+        res.json(data);
+    } catch (e) {
+        console.error('Error proxying to AI engine track-flow:', e);
+        res.status(500).json({ error: 'Server proxy error to AI engine' });
+    }
+};

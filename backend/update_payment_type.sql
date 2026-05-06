@@ -1,0 +1,2 @@
+ALTER TABLE doctors ADD COLUMN IF NOT EXISTS payment_type VARCHAR(50) DEFAULT 'monthly';
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS payment_type VARCHAR(50) DEFAULT 'monthly';

@@ -6,13 +6,13 @@ exports.getEmployees = async (req, res) => {
         
         // Fetch all doctors and staff
         const doctorsQuery = `
-            SELECT d.id, u.full_name, u.email, u.phone, 'doctor' as role_type, d.base_salary, d.bank_account_details, d.designation, d.department 
+            SELECT d.id, u.full_name, u.email, u.phone, 'doctor' as role_type, d.base_salary, d.payment_type, d.bank_account_details, d.designation, d.department 
             FROM doctors d 
             JOIN users u ON d.user_id = u.id 
             WHERE d.organization_id = $1
         `;
         const staffQuery = `
-            SELECT s.id, u.full_name, u.email, u.phone, 'staff' as role_type, s.base_salary, s.bank_account_details, s.designation, u.department 
+            SELECT s.id, u.full_name, u.email, u.phone, 'staff' as role_type, s.base_salary, s.payment_type, s.bank_account_details, s.designation, u.department 
             FROM staff s 
             JOIN users u ON s.user_id = u.id 
             WHERE s.organization_id = $1
@@ -63,12 +63,15 @@ exports.processPayroll = async (req, res) => {
             let base_salary = 0;
             
             if (role === 'doctor') {
-                const d = await directDb.query("SELECT base_salary FROM doctors WHERE user_id = $1", [userId]);
+                const d = await directDb.query("SELECT base_salary, payment_type FROM doctors WHERE user_id = $1", [userId]);
                 base_salary = d.rows[0]?.base_salary || 0;
             } else {
-                const s = await directDb.query("SELECT base_salary FROM staff WHERE user_id = $1", [userId]);
+                const s = await directDb.query("SELECT base_salary, payment_type FROM staff WHERE user_id = $1", [userId]);
                 base_salary = s.rows[0]?.base_salary || 0;
             }
+
+            // Note: If payment_type is 'hourly', this would ideally calculate based on attendance hours logged.
+            // For now, we'll store the base_salary directly but this sets up the foundation.
 
             const insertQuery = `
                 INSERT INTO payroll (organization_id, user_id, salary_month, base_salary, net_salary, payment_status)
@@ -116,5 +119,28 @@ exports.updateLeaveStatus = async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Failed to update leave status' });
+    }
+};
+
+exports.updateEmployeeSalary = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { base_salary, payment_type, role_type } = req.body;
+        
+        if (role_type === 'doctor') {
+            await directDb.query(
+                "UPDATE doctors SET base_salary = $1, payment_type = $2 WHERE id = $3",
+                [base_salary, payment_type, id]
+            );
+        } else {
+            await directDb.query(
+                "UPDATE staff SET base_salary = $1, payment_type = $2 WHERE id = $3",
+                [base_salary, payment_type, id]
+            );
+        }
+        res.json({ message: 'Salary updated successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to update salary' });
     }
 };

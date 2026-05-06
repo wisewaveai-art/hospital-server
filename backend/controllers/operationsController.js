@@ -3,24 +3,27 @@ const directDb = require('../utils/directDb');
 const getOperations = async (req, res) => {
     try {
         const { role, userId } = req.query;
+        const orgId = req.organizationId;
 
         console.log('Fetching operations for role:', role);
         let queryStr = `
             SELECT o.*, 
-                   p.full_name as patient_name, 
-                   u.full_name as doctor_name 
+                   pu.full_name as patient_name, 
+                   du.full_name as doctor_name 
             FROM operations o
             LEFT JOIN patients p ON o.patient_id = p.id
-            LEFT JOIN users u ON o.doctor_id = u.id
-            WHERE 1=1
+            LEFT JOIN users pu ON p.user_id = pu.id
+            LEFT JOIN doctors d ON o.doctor_id = d.id
+            LEFT JOIN users du ON d.user_id = du.id
+            WHERE o.organization_id = $1
         `;
-        let params = [];
+        let params = [orgId];
 
         if (role === 'patient' && userId) {
-            queryStr += ' AND o.patient_id = $1';
+            queryStr += ' AND p.user_id = $2';
             params.push(userId);
         } else if (role === 'doctor' && userId) {
-            queryStr += ' AND o.doctor_id = $1';
+            queryStr += ' AND d.user_id = $2';
             params.push(userId);
         }
         
@@ -52,18 +55,20 @@ const getOperations = async (req, res) => {
 const createOperation = async (req, res) => {
     try {
         const { patient_id, doctor_id, operation_name, operation_date, notes } = req.body;
+        const orgId = req.organizationId;
         
         const insertQuery = `
-            INSERT INTO operations (patient_id, doctor_id, operation_name, operation_date, notes) 
-            VALUES ($1, $2, $3, $4, $5) RETURNING *
+            INSERT INTO operations (organization_id, patient_id, doctor_id, operation_name, operation_date, notes) 
+            VALUES ($1, $2, $3, $4, $5, $6) RETURNING *
         `;
         
         let data = null;
         try {
-            const { rows } = await directDb.query(insertQuery, [patient_id, doctor_id, operation_name, operation_date, notes]);
+            const { rows } = await directDb.query(insertQuery, [orgId, patient_id, doctor_id, operation_name, operation_date, notes]);
             data = rows[0];
         } catch (e) {
-            throw new Error("Operations table not fully migrated yet");
+            console.error("Database error in createOperation:", e);
+            throw new Error("Database error scheduling operation: " + e.message);
         }
 
         res.status(201).json(data);

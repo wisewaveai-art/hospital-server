@@ -4,6 +4,7 @@ const hrController = require('../controllers/hrController');
 
 router.get('/employees', hrController.getEmployees);
 router.put('/employees/:id/salary', hrController.updateEmployeeSalary);
+router.get('/attendance-summary', hrController.getAttendanceSummary);
 router.get('/payroll', hrController.getPayrollHistory);
 router.post('/payroll/process', hrController.processPayroll);
 router.get('/leaves', hrController.getLeaveRequests);

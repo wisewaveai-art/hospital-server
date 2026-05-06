@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const directDb = require('../utils/directDb');
+const sendEmail = require('../utils/emailSender');
 
 // Update user role and creating missing profile if needed
 exports.updateUserRole = async (req, res) => {
@@ -143,9 +144,55 @@ exports.createUser = async (req, res) => {
             await directDb.query('INSERT INTO patients (user_id, organization_id, patient_type) VALUES ($1, $2, $3)', [newUser.id, orgId, 'Outpatient']);
         }
 
+        // Send email with credentials
+        try {
+            await sendEmail(
+                email,
+                'Your Wise Hospital Account Credentials',
+                `<h2>Welcome to Wise Hospital</h2>
+                 <p>Hello ${full_name},</p>
+                 <p>Your account has been created successfully. Below are your login credentials:</p>
+                 <p><strong>Email:</strong> ${email}</p>
+                 <p><strong>Password:</strong> ${password}</p>
+                 <p><strong>Role:</strong> ${role}</p>
+                 <p>Please log in and change your password as soon as possible.</p>`
+            );
+        } catch (emailErr) {
+            console.error('User created but failed to send email:', emailErr);
+            return res.status(201).json({ message: 'User created successfully, but failed to send credentials email', user: newUser });
+        }
+
         res.status(201).json({ message: 'User created successfully', user: newUser });
     } catch (err) {
         console.error('Error creating user:', err);
         res.status(500).json({ error: 'Server error creating user' });
     }
 };
+
+exports.deleteUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const orgId = req.organizationId || (req.user && req.user.organization_id);
+
+        // Security check: Only delete users within the same organization unless superadmin
+        if (req.user && req.user.role !== 'superadmin') {
+            const userCheck = await directDb.query('SELECT organization_id FROM users WHERE id = $1', [id]);
+            if (userCheck.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+            if (userCheck.rows[0].organization_id !== orgId) {
+                return res.status(403).json({ error: 'Unauthorized to delete this user' });
+            }
+        }
+
+        const { rowCount } = await directDb.query('DELETE FROM users WHERE id = $1', [id]);
+        
+        if (rowCount === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json({ message: 'User deleted successfully' });
+    } catch (err) {
+        console.error('Error deleting user:', err);
+        res.status(500).json({ error: 'Server error deleting user' });
+    }
+};
+

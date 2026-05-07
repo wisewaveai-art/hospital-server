@@ -150,17 +150,6 @@ exports.getAttendanceSummary = async (req, res) => {
         const orgId = req.organizationId;
         const { month } = req.query; // YYYY-MM
         
-        let dateCondition = "";
-        let params = [orgId, orgId];
-        
-        if (month) {
-            dateCondition = "AND DATE_FORMAT(a.date, '%Y-%m') = $3";
-            params.push(month);
-        }
-
-        const orgIdPlaceholder = month ? "$4" : "$3";
-        params.push(orgId);
-
         const query = `
             SELECT 
                 u.id as user_id, 
@@ -168,17 +157,25 @@ exports.getAttendanceSummary = async (req, res) => {
                 u.role, 
                 COALESCE(d.base_salary, s.base_salary, 0) as base_salary,
                 COALESCE(d.payment_type, s.payment_type, 'monthly') as payment_type,
-                SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) as days_attended,
-                SUM(CASE WHEN a.status = 'Leave' THEN 1 ELSE 0 END) as days_on_leave
+                (SELECT COUNT(*) FROM attendance att 
+                 WHERE att.user_id = u.id 
+                 AND att.status = 'Present' 
+                 ${month ? "AND DATE_FORMAT(att.date, '%Y-%m') = $1" : ""}
+                ) as days_attended,
+                (SELECT COUNT(*) FROM leave_requests lr 
+                 WHERE lr.user_id = u.id 
+                 AND lr.status = 'Approved'
+                 ${month ? "AND (DATE_FORMAT(lr.start_date, '%Y-%m') = $2 OR DATE_FORMAT(lr.end_date, '%Y-%m') = $2)" : ""}
+                ) as days_on_leave
             FROM users u
-            LEFT JOIN doctors d ON u.id = d.user_id AND d.organization_id = $1
-            LEFT JOIN staff s ON u.id = s.user_id AND s.organization_id = $2
-            LEFT JOIN attendance a ON u.id = a.user_id ${dateCondition}
-            WHERE u.organization_id = ${orgIdPlaceholder} AND u.role IN ('doctor', 'staff', 'nurse')
+            LEFT JOIN doctors d ON u.id = d.user_id
+            LEFT JOIN staff s ON u.id = s.user_id
+            WHERE u.organization_id = $3 AND u.role IN ('doctor', 'staff', 'nurse')
             GROUP BY u.id, u.full_name, u.role, d.base_salary, s.base_salary, d.payment_type, s.payment_type
             ORDER BY u.full_name ASC
         `;
 
+        const params = month ? [month, month, orgId] : ['', '', orgId];
         const { rows } = await directDb.query(query, params);
         
         const summary = rows.map(row => {

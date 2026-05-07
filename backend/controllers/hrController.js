@@ -168,11 +168,12 @@ exports.getAttendanceSummary = async (req, res) => {
                 u.role, 
                 COALESCE(d.base_salary, s.base_salary, 0) as base_salary,
                 COALESCE(d.payment_type, s.payment_type, 'monthly') as payment_type,
-                COUNT(a.id) as days_attended
+                SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) as days_attended,
+                SUM(CASE WHEN a.status = 'Leave' THEN 1 ELSE 0 END) as days_on_leave
             FROM users u
             LEFT JOIN doctors d ON u.id = d.user_id AND d.organization_id = $1
             LEFT JOIN staff s ON u.id = s.user_id AND s.organization_id = $2
-            LEFT JOIN attendance a ON u.id = a.user_id AND a.status = 'Present' ${dateCondition}
+            LEFT JOIN attendance a ON u.id = a.user_id ${dateCondition}
             WHERE u.organization_id = ${orgIdPlaceholder} AND u.role IN ('doctor', 'staff', 'nurse')
             GROUP BY u.id, u.full_name, u.role, d.base_salary, s.base_salary, d.payment_type, s.payment_type
             ORDER BY u.full_name ASC

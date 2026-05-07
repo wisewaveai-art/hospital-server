@@ -10,6 +10,9 @@ CREATE TABLE IF NOT EXISTS organizations (
     enabled_modules JSON DEFAULT ('["patients", "doctors", "appointments", "billing", "pharmacy", "staff", "inventory", "lab"]'),
     settings JSON DEFAULT ('{}'),
     app_theme JSON DEFAULT ('{}'),
+    site_config JSON,
+    site_builder_enabled BOOLEAN DEFAULT TRUE,
+    custom_home_content TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );

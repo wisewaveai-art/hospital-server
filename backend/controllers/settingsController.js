@@ -26,26 +26,23 @@ exports.updateSettings = async (req, res) => {
 
         let result;
         if (!current) {
-            // Insert
-            let result;
-            if (!current) {
-                // Insert new organization with provided fields
-                const columns = Object.keys(updates);
-                const values = Object.values(updates);
-                const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
-                const insertQuery = `INSERT INTO organizations (${columns.join(', ')}) VALUES (${placeholders}) RETURNING *`;
-                const insertRes = await directDb.query(insertQuery, values);
-                result = insertRes.rows[0];
-            } else {
-                // Update existing organization
-                const columns = Object.keys(updates);
-                const values = Object.values(updates);
-                const setClause = columns.map((col, i) => `${col} = $${i + 1}`).join(', ');
-                const updateQuery = `UPDATE organizations SET ${setClause} WHERE id = $${columns.length + 1} RETURNING *`;
-                const updateRes = await directDb.query(updateQuery, [...values, current.id]);
-                result = updateRes.rows[0];
-            }
-            res.json(result);
+            // Insert new organization with provided fields
+            const columns = Object.keys(updates);
+            const values = Object.values(updates).map(v => (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v);
+            const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
+            const insertQuery = `INSERT INTO organizations (${columns.join(', ')}) VALUES (${placeholders}) RETURNING *`;
+            const insertRes = await directDb.query(insertQuery, values);
+            result = insertRes.rows[0];
+        } else {
+            // Update existing organization
+            const columns = Object.keys(updates);
+            const values = Object.values(updates).map(v => (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v);
+            const setClause = columns.map((col, i) => `${col} = $${i + 1}`).join(', ');
+            const updateQuery = `UPDATE organizations SET ${setClause} WHERE id = $${columns.length + 1}`;
+            await directDb.query(updateQuery, [...values, current.id]);
+            
+            const updated = await directDb.query('SELECT * FROM organizations WHERE id = $1', [current.id]);
+            result = updated.rows[0];
         }
 
         res.json(result);

@@ -56,23 +56,17 @@ const createOperation = async (req, res) => {
     try {
         const { patient_id, doctor_id, operation_name, operation_date, notes } = req.body;
         const orgId = req.organizationId;
-        
+        const opId = require('crypto').randomUUID();
         const insertQuery = `
-            INSERT INTO operations (organization_id, patient_id, doctor_id, operation_name, operation_date, notes) 
-            VALUES ($1, $2, $3, $4, $5, $6) RETURNING *
+            INSERT INTO operations (id, organization_id, patient_id, doctor_id, operation_name, operation_date, notes) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
         `;
+        await directDb.query(insertQuery, [opId, orgId, patient_id, doctor_id, operation_name, operation_date, notes]);
         
-        let data = null;
-        try {
-            const { rows } = await directDb.query(insertQuery, [orgId, patient_id, doctor_id, operation_name, operation_date, notes]);
-            data = rows[0];
-        } catch (e) {
-            console.error("Database error in createOperation:", e);
-            throw new Error("Database error scheduling operation: " + e.message);
-        }
-
-        res.status(201).json(data);
+        const { rows } = await directDb.query('SELECT * FROM operations WHERE id = $1', [opId]);
+        res.status(201).json(rows[0]);
     } catch (error) {
+        console.error("Create operation error:", error);
         res.status(400).json({ error: error.message });
     }
 };

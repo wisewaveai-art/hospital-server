@@ -15,8 +15,9 @@ exports.updateUserRole = async (req, res) => {
         }
 
         // 1. Update User Role
-        const updateQuery = `UPDATE users SET role = $1 WHERE id = $2 RETURNING *`;
-        const { rows } = await directDb.query(updateQuery, [role, id]);
+        const updateQuery = `UPDATE users SET role = $1 WHERE id = $2`;
+        await directDb.query(updateQuery, [role, id]);
+        const { rows } = await directDb.query('SELECT * FROM users WHERE id = $1', [id]);
         
         if (!rows.length) throw new Error('User not found');
         const user = rows[0];
@@ -86,10 +87,11 @@ exports.updateProfilePic = async (req, res) => {
         const { id } = req.params;
         const { profile_pic } = req.body;
         
-        const { rows } = await directDb.query(
-            'UPDATE users SET profile_pic = $1 WHERE id = $2 RETURNING *',
+        await directDb.query(
+            'UPDATE users SET profile_pic = $1 WHERE id = $2',
             [profile_pic, id]
         );
+        const { rows } = await directDb.query('SELECT * FROM users WHERE id = $1', [id]);
             
         res.json({ message: 'Profile picture updated', user: rows[0] });
     } catch(err) {
@@ -124,16 +126,18 @@ exports.createUser = async (req, res) => {
         const orgId = req.organizationId || (req.user && req.user.organization_id);
 
         // Insert new user
-        const insertUser = await directDb.query(
-            'INSERT INTO users (email, password_hash, full_name, role, organization_id) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [email, password_hash, full_name, role, orgId]
+        const userId = require('crypto').randomUUID();
+        await directDb.query(
+            'INSERT INTO users (id, email, password_hash, full_name, role, organization_id) VALUES ($1, $2, $3, $4, $5, $6)',
+            [userId, email, password_hash, full_name, role, orgId]
         );
 
-        if (!insertUser.rows || insertUser.rows.length === 0) {
+        const { rows } = await directDb.query('SELECT * FROM users WHERE id = $1', [userId]);
+        if (rows.length === 0) {
             throw new Error('Failed to create user');
         }
 
-        const newUser = insertUser.rows[0];
+        const newUser = rows[0];
 
         // Ensure secondary profile creation (doctor, staff, etc.)
         if (role === 'doctor') {

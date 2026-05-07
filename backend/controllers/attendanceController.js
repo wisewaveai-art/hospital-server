@@ -34,19 +34,23 @@ exports.checkIn = async (req, res) => {
         const checkExisting = await directDb.query('SELECT id FROM attendance WHERE user_id = $1 AND date = $2', [userId, today]);
         
         if (checkExisting.rows.length > 0) {
-            const { rows } = await directDb.query(
-                `UPDATE attendance SET check_in_time = $1, status = 'Present', shift = $2 WHERE id = $3 RETURNING *`,
-                [now, finalShift || null, checkExisting.rows[0].id]
+            const attendId = checkExisting.rows[0].id;
+            await directDb.query(
+                `UPDATE attendance SET check_in_time = $1, status = 'Present', shift = $2 WHERE id = $3`,
+                [now, finalShift || null, attendId]
             );
+            const { rows } = await directDb.query('SELECT * FROM attendance WHERE id = $1', [attendId]);
             return res.json(rows[0]);
         }
 
-        const { rows } = await directDb.query(
-            `INSERT INTO attendance (organization_id, user_id, date, check_in_time, status, shift) 
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-            [orgId, userId, today, now, 'Present', finalShift || null]
+        const attendId = require('crypto').randomUUID();
+        await directDb.query(
+            `INSERT INTO attendance (id, organization_id, user_id, date, check_in_time, status, shift) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [attendId, orgId, userId, today, now, 'Present', finalShift || null]
         );
 
+        const { rows } = await directDb.query('SELECT * FROM attendance WHERE id = $1', [attendId]);
         res.json(rows[0]);
     } catch (err) {
         console.error(err);
@@ -64,11 +68,13 @@ exports.checkOut = async (req, res) => {
 
         if (current.length === 0) return res.status(404).json({ error: 'No check-in found for today' });
 
-        const { rows } = await directDb.query(
-            'UPDATE attendance SET check_out_time = $1 WHERE id = $2 RETURNING *',
-            [now, current[0].id]
+        const attendId = current[0].id;
+        await directDb.query(
+            'UPDATE attendance SET check_out_time = $1 WHERE id = $2',
+            [now, attendId]
         );
 
+        const { rows } = await directDb.query('SELECT * FROM attendance WHERE id = $1', [attendId]);
         res.json(rows[0]);
     } catch (err) {
         console.error(err);
@@ -128,11 +134,13 @@ exports.applyLeave = async (req, res) => {
         const { userId, fromDate, toDate, leaveType, reason } = req.body;
         const orgId = req.organizationId;
 
-        const { rows } = await directDb.query(
-            `INSERT INTO leave_requests (organization_id, user_id, start_date, end_date, leave_type, reason, status) 
-             VALUES ($1, $2, $3, $4, $5, $6, 'Pending') RETURNING *`,
-            [orgId, userId, fromDate, toDate, leaveType, reason]
+        const leaveId = require('crypto').randomUUID();
+        await directDb.query(
+            `INSERT INTO leave_requests (id, organization_id, user_id, start_date, end_date, leave_type, reason, status) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [leaveId, orgId, userId, fromDate, toDate, leaveType, reason, 'Pending']
         );
+        const { rows } = await directDb.query('SELECT * FROM leave_requests WHERE id = $1', [leaveId]);
         res.json(rows[0]);
     } catch (err) {
         console.error('Error applying leave:', err);
@@ -194,10 +202,11 @@ exports.getAllLeaves = async (req, res) => {
 exports.updateLeaveStatus = async (req, res) => {
     try {
         const { id, status } = req.body;
-        const { rows } = await directDb.query(
-            'UPDATE leave_requests SET status = $1 WHERE id = $2 RETURNING *',
+        await directDb.query(
+            'UPDATE leave_requests SET status = $1 WHERE id = $2',
             [status, id]
         );
+        const { rows } = await directDb.query('SELECT * FROM leave_requests WHERE id = $1', [id]);
         res.json(rows[0]);
     } catch (err) {
         console.error(err);
@@ -232,10 +241,11 @@ exports.getStaffByRole = async (req, res) => {
 exports.updateUserShift = async (req, res) => {
     try {
         const { userId, assigned_shift, shift_start_time, shift_end_time } = req.body;
-        const { rows } = await directDb.query(
-            'UPDATE users SET assigned_shift = $1, shift_start_time = $2, shift_end_time = $3 WHERE id = $4 RETURNING *',
+        await directDb.query(
+            'UPDATE users SET assigned_shift = $1, shift_start_time = $2, shift_end_time = $3 WHERE id = $4',
             [assigned_shift, shift_start_time, shift_end_time, userId]
         );
+        const { rows } = await directDb.query('SELECT * FROM users WHERE id = $1', [userId]);
         res.json(rows[0]);
     } catch (err) {
         console.error(err);

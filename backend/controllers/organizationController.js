@@ -18,7 +18,15 @@ exports.getCurrentOrganization = async (req, res) => {
             return res.status(404).json({ error: 'Organization not found' });
         }
 
-        res.json(rows[0]);
+        const row = rows[0];
+        const jsonCols = ['settings', 'app_theme', 'site_config', 'enabled_modules'];
+        jsonCols.forEach(col => {
+          if (typeof row[col] === 'string') {
+            try { row[col] = JSON.parse(row[col]); } catch(e) {}
+          }
+        });
+
+        res.json(row);
     } catch (err) {
         console.error('Error in getCurrentOrganization:', err);
         res.status(500).json({ error: 'Server error' });

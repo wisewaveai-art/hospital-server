@@ -6,7 +6,17 @@ exports.getSettings = async (req, res) => {
     if (result.rowCount === 0) {
       return res.json({});
     }
-    res.json(result.rows[0]);
+    const row = result.rows[0];
+    
+    // Parse JSON columns because MariaDB returns them as strings
+    const jsonCols = ['settings', 'app_theme', 'site_config', 'enabled_modules'];
+    jsonCols.forEach(col => {
+      if (typeof row[col] === 'string') {
+        try { row[col] = JSON.parse(row[col]); } catch(e) {}
+      }
+    });
+
+    res.json(row);
   } catch (err) {
     console.error('Get Settings Error:', err);
     res.status(500).json({ error: 'Server error fetching settings' });

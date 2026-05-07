@@ -374,3 +374,17 @@ CREATE TABLE IF NOT EXISTS attendance (
     UNIQUE KEY (user_id, date)
 );
 
+-- Financials: Expenses
+CREATE TABLE IF NOT EXISTS expenses (
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    organization_id CHAR(36),
+    category VARCHAR(100), -- 'Utility', 'Maintenance', 'Medical Supplies', 'Salary', 'Other'
+    description TEXT,
+    amount DECIMAL(15,2) DEFAULT 0.00,
+    expense_date DATE NOT NULL,
+    payment_method VARCHAR(50), -- 'Cash', 'Bank Transfer', 'Credit Card'
+    status VARCHAR(50) DEFAULT 'Paid',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+);
+

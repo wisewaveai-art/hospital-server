@@ -28,6 +28,8 @@ services:
     restart: unless-stopped
     env_file:
       - ./backend/.env
+    environment:
+      - DATABASE_HOST=mariadb
     ports:
       - "5000:5000"
     depends_on:
@@ -45,6 +47,8 @@ services:
     restart: unless-stopped
     env_file:
       - ./hospital-ai/.env
+    environment:
+      - DATABASE_HOST=mariadb
     ports:
       - "8000:8000"
     depends_on:

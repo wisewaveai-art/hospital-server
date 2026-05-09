@@ -13,7 +13,7 @@ const pool = mysql.createPool({
   password: getEnv('DATABASE_PASSWORD', ''),
   database: getEnv('DATABASE_NAME', 'wisehospital'),
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: 100,
   queueLimit: 0,
 });
 

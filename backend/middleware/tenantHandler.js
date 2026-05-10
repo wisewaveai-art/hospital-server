@@ -12,7 +12,6 @@ const tenantHandler = async (req, res, next) => {
         let slug = req.headers['x-organization-slug'];
 
         if (!slug) {
-            // Check subdomain
             const host = req.get('host');
             const parts = host.split('.');
             if (parts.length > 2 && !host.includes('localhost') && !host.includes('127.0.0.1')) {
@@ -31,16 +30,25 @@ const tenantHandler = async (req, res, next) => {
             }
         }
 
-        // Fallback to default org on localhost if no slug provided
         if (!organizationId && (req.get('host').includes('localhost') || req.get('host').includes('127.0.0.1'))) {
             organizationId = '00000000-0000-0000-0000-000000000000';
         }
 
+        // --- NEW: Attach the correct database pool to the request ---
         req.organizationId = organizationId;
-        next();
+        const tenantPool = await pool.getTenantDb(organizationId);
+        req.db = tenantPool;
+        
+        // Use AsyncLocalStorage to provide the pool to all downstream code (like directDb)
+        pool.dbStorage.run(tenantPool, () => {
+            next();
+        });
     } catch (err) {
         console.error('Tenant Handler Error:', err);
-        next();
+        req.db = pool; // Fallback to main pool
+        pool.dbStorage.run(pool, () => {
+            next();
+        });
     }
 };
 

@@ -2,11 +2,13 @@ const directDb = require('../utils/directDb');
 
 exports.getSettings = async (req, res) => {
   try {
-    const result = await directDb.query('SELECT * FROM organizations LIMIT 1');
-    if (result.rowCount === 0) {
+    const orgId = req.organizationId;
+    const [rows] = await directDb.pool.query('SELECT * FROM organizations WHERE id = ?', [orgId || '0001-0000-00001']);
+    
+    if (!rows || rows.length === 0) {
       return res.json({});
     }
-    const row = result.rows[0];
+    const row = rows[0];
     
     // Parse JSON columns because MariaDB returns them as strings
     const jsonCols = ['settings', 'app_theme', 'site_config', 'enabled_modules'];
@@ -126,13 +128,18 @@ exports.getPresets = async (req, res) => {
 
 exports.getTheme = async (req, res) => {
     try {
-        const result = await directDb.query('SELECT app_theme FROM organizations LIMIT 1');
-    if (result.rowCount === 0) {
+        const orgId = req.organizationId;
+        const [rows] = await directDb.pool.query('SELECT app_theme FROM organizations WHERE id = ?', [orgId || '0001-0000-00001']);
+    if (!rows || rows.length === 0) {
         return res.json({});
     }
-    const data = result.rows[0];
+    const data = rows[0];
+    let theme = data.app_theme;
+    if (typeof theme === 'string') {
+        try { theme = JSON.parse(theme); } catch(e) {}
+    }
 
-        res.json(data.app_theme || {});
+        res.json(theme || {});
     } catch (err) {
         console.error('Get Theme Error:', err);
         res.status(500).json({ error: 'Server error fetching theme' });

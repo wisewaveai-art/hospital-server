@@ -12,13 +12,19 @@ exports.getCurrentOrganization = async (req, res) => {
             queryParams = [orgId];
         }
 
-        const { rows } = await directDb.query(queryStr, queryParams);
+        const { rows } = await directDb.pool.query(
+          queryStr.replace(/\$\d+/g, '?'), 
+          queryParams
+        );
+        
+        // Convert to the format expected by the frontend (.rows)
+        const resultRows = rows || [];
 
-        if (rows.length === 0) {
+        if (resultRows.length === 0) {
             return res.status(404).json({ error: 'Organization not found' });
         }
 
-        const row = rows[0];
+        const row = resultRows[0];
         const jsonCols = ['settings', 'app_theme', 'site_config', 'enabled_modules'];
         jsonCols.forEach(col => {
           if (typeof row[col] === 'string') {
@@ -35,14 +41,14 @@ exports.getCurrentOrganization = async (req, res) => {
 
 exports.getAll = async (req, res) => {
     try {
-        const { rows } = await directDb.query('SELECT * FROM organizations');
+        const [rows] = await directDb.pool.query('SELECT * FROM organizations');
         res.json(rows);
     } catch (err) { res.status(500).json({ error: 'Server error' }); }
 };
 
 exports.getById = async (req, res) => {
     try {
-        const { rows } = await directDb.query('SELECT * FROM organizations WHERE id = $1', [req.params.id]);
+        const [rows] = await directDb.pool.query('SELECT * FROM organizations WHERE id = ?', [req.params.id]);
         if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
         res.json(rows[0]);
     } catch (err) { res.status(500).json({ error: 'Server error' }); }
@@ -51,10 +57,11 @@ exports.getById = async (req, res) => {
 exports.create = async (req, res) => {
     try {
         const { name, slug, logo_url, primary_color, secondary_color } = req.body;
-        const { rows } = await directDb.query(
-            'INSERT INTO organizations (name, slug, logo_url, primary_color, secondary_color) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        const [result] = await directDb.pool.query(
+            'INSERT INTO organizations (name, slug, logo_url, primary_color, secondary_color) VALUES (?, ?, ?, ?, ?)',
             [name, slug, logo_url, primary_color, secondary_color]
         );
+        const [rows] = await directDb.pool.query('SELECT * FROM organizations WHERE id = ?', [result.insertId]);
         res.status(201).json(rows[0]);
     } catch (err) { res.status(500).json({ error: 'Server error' }); }
 };

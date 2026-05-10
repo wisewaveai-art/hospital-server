@@ -1,30 +1,44 @@
 const pool = require('../db');
 
-// Adapter to convert PostgreSQL `$1, $2` syntax to MySQL `?` and return `.rows`
-module.exports = {
-    query: async (text, params = []) => {
-        // Convert $1, $2, etc. to ?
-        const mysqlQuery = text.replace(/\$\d+/g, '?');
-        
-        // Ensure objects are stringified for JSON columns in MySQL
-        const safeParams = params.map(p => 
-            (p !== null && typeof p === 'object' && !(p instanceof Date)) ? JSON.stringify(p) : p
-        );
+/**
+ * Creates a query adapter for a specific database pool
+ */
+const createQueryAdapter = (targetPool) => {
+    return {
+        query: async (text, params = []) => {
+            // Check if there is a tenant-specific pool in the current async context
+            const contextPool = pool.dbStorage.getStore();
+            const activePool = contextPool || targetPool;
 
-        const [rows] = await pool.query(mysqlQuery, safeParams);
-        
-        // Handle MySQL/MariaDB ResultSetHeader for INSERT/UPDATE/DELETE
-        if (rows && !Array.isArray(rows)) {
-            return { 
-                rows: [], 
-                rowCount: rows.affectedRows || 0,
-                insertId: rows.insertId
-            };
-        }
+            // Convert $1, $2, etc. to ?
+            const mysqlQuery = text.replace(/\$\d+/g, '?');
+            
+            // Ensure objects are stringified for JSON columns in MariaDB
+            const safeParams = params.map(p => 
+                (p !== null && typeof p === 'object' && !(p instanceof Date)) ? JSON.stringify(p) : p
+            );
 
-        return { rows: rows || [], rowCount: (rows || []).length };
-    },
-    pool
+            const [rows] = await activePool.query(mysqlQuery, safeParams);
+            
+            // Handle MariaDB ResultSetHeader for INSERT/UPDATE/DELETE
+            if (rows && !Array.isArray(rows)) {
+                return { 
+                    rows: [], 
+                    rowCount: rows.affectedRows || 0,
+                    insertId: rows.insertId
+                };
+            }
+
+            return { rows: rows || [], rowCount: (rows || []).length };
+        },
+        pool: targetPool
+    };
 };
+
+// Default instance for legacy code
+const defaultAdapter = createQueryAdapter(pool);
+defaultAdapter.wrap = createQueryAdapter;
+
+module.exports = defaultAdapter;
 
 

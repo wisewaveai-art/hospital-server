@@ -13,11 +13,12 @@ CREATE TABLE IF NOT EXISTS organizations (
     site_config JSON,
     site_builder_enabled BOOLEAN DEFAULT TRUE,
     custom_home_content TEXT,
+    db_name VARCHAR(100), -- Store the name of the dedicated database here
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-INSERT IGNORE INTO organizations (id, name, slug) VALUES ('00000000-0000-0000-0000-000000000000', 'Wise Health Center', 'main');
+INSERT IGNORE INTO organizations (id, name, slug, db_name) VALUES ('0001-0000-00001', 'Wise Health Center', 'main', 'wisehospital');
 
 -- Users
 CREATE TABLE IF NOT EXISTS users (

@@ -26,28 +26,36 @@ exports.register = async (req, res) => {
             return res.status(400).json({ error: 'Organization slug is already taken. Please choose another.' });
         }
 
-        // 3. Create Organization (Direct DB)
-        const orgInsert = await directDb.query(
-            'INSERT INTO organizations (name, slug) VALUES ($1, $2) RETURNING *',
+        // 3. Create Organization (Direct DB - Main Pool)
+        const [orgResult] = await directDb.pool.query(
+            'INSERT INTO organizations (name, slug) VALUES (?, ?)',
             [organization_name, organization_slug]
         );
-        const newOrg = orgInsert.rows[0];
+        
+        // Find the newly created org to get its UUID
+        const [orgRows] = await directDb.pool.query('SELECT * FROM organizations WHERE slug = ?', [organization_slug]);
+        const newOrg = orgRows[0];
+
+        // --- NEW: Auto-provision the private database immediately ---
+        const tenantPool = await require('../db').getTenantDb(newOrg.id);
 
         // 4. Hash password
         const salt = await bcrypt.genSalt(10);
         const password_hash = await bcrypt.hash(password, salt);
 
         // 5. Check if first user ever (for superadmin)
-        const countRes = await directDb.query('SELECT count(*) FROM users');
-        const count = parseInt(countRes.rows[0].count);
+        const [countRows] = await directDb.pool.query('SELECT count(*) as count FROM users');
+        const count = parseInt(countRows[0].count);
         const role = (count === 0) ? 'superadmin' : 'admin';
 
-        // 6. Insert user (Direct DB)
-        const userInsert = await directDb.query(
-            'INSERT INTO users (email, password_hash, full_name, role, organization_id) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        // 6. Insert user (Direct DB - Main Pool)
+        await directDb.pool.query(
+            'INSERT INTO users (email, password_hash, full_name, role, organization_id) VALUES (?, ?, ?, ?, ?)',
             [email, password_hash, full_name, role, newOrg.id]
         );
-        const newUser = userInsert.rows[0];
+        
+        const [userRows] = await directDb.pool.query('SELECT * FROM users WHERE email = ?', [email]);
+        const newUser = userRows[0];
 
         // 7. Create JWT
         const token = jwt.sign(
@@ -84,7 +92,7 @@ exports.login = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        const { rows } = await directDb.query('SELECT * FROM users WHERE email = $1', [email]);
+        const [rows] = await directDb.pool.query('SELECT * FROM users WHERE email = ?', [email]);
         
         if (rows.length === 0) {
             console.log(`Login attempt failed: user not found for ${email}`);
@@ -93,12 +101,12 @@ exports.login = async (req, res) => {
         
         const user = rows[0];
 
-        // Fetch organization separately to avoid join errors if foreign keys are missing
+        // Fetch organization separately from the supervisor table
         let organization = null;
         if (user.organization_id) {
-            const orgRes = await directDb.query('SELECT name, slug FROM organizations WHERE id = $1', [user.organization_id]);
-            if (orgRes.rows.length > 0) {
-                organization = orgRes.rows[0];
+            const [orgRows] = await directDb.pool.query('SELECT name, slug FROM organizations WHERE id = ?', [user.organization_id]);
+            if (orgRows.length > 0) {
+                organization = orgRows[0];
             }
         }
 

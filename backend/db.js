@@ -20,6 +20,7 @@ const mainPool = mysql.createPool({
   user: getEnv('DATABASE_USER', 'root'),
   password: getEnv('DATABASE_PASSWORD', ''),
   database: mainDbName,
+  multipleStatements: true,
   waitForConnections: true,
   connectionLimit: 100,
   queueLimit: 0,

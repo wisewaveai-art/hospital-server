@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS organizations (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+-- Ensure db_name column exists for existing tables
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS db_name VARCHAR(100) AFTER custom_home_content;
+
 INSERT IGNORE INTO organizations (id, name, slug, db_name) VALUES ('0001-0000-00001', 'Wise Health Center', 'main', 'wisehospital');
 
 -- Users

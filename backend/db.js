@@ -1,6 +1,8 @@
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 const { AsyncLocalStorage } = require('async_hooks');
+const fs = require('fs');
+const path = require('path');
 
 const dbStorage = new AsyncLocalStorage();
 

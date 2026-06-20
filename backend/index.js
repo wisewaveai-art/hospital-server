@@ -83,6 +83,7 @@ app.use('/api/ai', require('./routes/aiRoutes'));
 app.use('/api/ambulances', require('./routes/ambulanceRoutes'));
 app.use('/api/diagnostic-labs', require('./routes/diagnosticLabRoutes'));
 app.use('/api/bi', require('./routes/biRoutes'));
+app.use('/api/vitals', require('./routes/vitalsRoutes'));
 
 
 const hrRoutes = require('./routes/hr');

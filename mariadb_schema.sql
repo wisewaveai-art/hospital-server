@@ -164,6 +164,27 @@ CREATE TABLE IF NOT EXISTS patient_visits (
     FOREIGN KEY (doctor_id) REFERENCES doctors(id) ON DELETE SET NULL
 );
 
+-- Patient Vitals
+CREATE TABLE IF NOT EXISTS patient_vitals (
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    organization_id CHAR(36),
+    patient_id CHAR(36),
+    recorded_by CHAR(36),
+    blood_pressure VARCHAR(20),
+    heart_rate INT,
+    temperature DECIMAL(5,2),
+    oxygen_saturation INT,
+    respiratory_rate INT,
+    weight DECIMAL(5,2),
+    height DECIMAL(5,2),
+    notes TEXT,
+    recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+    FOREIGN KEY (recorded_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
 -- Lab Reports
 CREATE TABLE IF NOT EXISTS lab_reports (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),

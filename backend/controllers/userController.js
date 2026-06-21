@@ -125,10 +125,17 @@ exports.createUser = async (req, res) => {
         // Get organization from the admin who is creating this user
         const orgId = req.organizationId || (req.user && req.user.organization_id);
 
-        // Insert new user
+        // Insert new user into MAIN database (for global login)
         const userId = require('crypto').randomUUID();
+        await directDb.pool.query(
+            'INSERT INTO users (id, email, password_hash, full_name, role, organization_id) VALUES (?, ?, ?, ?, ?, ?)',
+            [userId, email, password_hash, full_name, role, orgId]
+        );
+
+        // Insert new user into TENANT database (for local foreign keys)
+        // If main DB and tenant DB are the same (no multi-tenant), we use INSERT IGNORE
         await directDb.query(
-            'INSERT INTO users (id, email, password_hash, full_name, role, organization_id) VALUES ($1, $2, $3, $4, $5, $6)',
+            'INSERT IGNORE INTO users (id, email, password_hash, full_name, role, organization_id) VALUES ($1, $2, $3, $4, $5, $6)',
             [userId, email, password_hash, full_name, role, orgId]
         );
 

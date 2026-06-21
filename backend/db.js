@@ -42,7 +42,7 @@ async function getTenantDb(orgId) {
 
   try {
     // 2. Query the "Supervisor" table (organizations) to find the db_name
-    const [orgs] = await mainPool.query(`SELECT db_name FROM organizations WHERE id = ?`, [orgId]);
+    const [orgs] = await mainPool.query(`SELECT name, slug, db_name FROM organizations WHERE id = ?`, [orgId]);
     
     let dbName;
     if (orgs.length > 0 && orgs[0].db_name) {
@@ -65,6 +65,10 @@ async function getTenantDb(orgId) {
         database: dbName,
         connectionLimit: 50
       });
+      // Ensure org row exists to satisfy FKs
+      if (orgs.length > 0) {
+        await pool.query('INSERT IGNORE INTO organizations (id, name, slug, db_name) VALUES (?, ?, ?, ?)', [orgId, orgs[0].name, orgs[0].slug, dbName]);
+      }
       pools[cacheKey] = pool;
       return pool;
     }
@@ -92,6 +96,10 @@ async function getTenantDb(orgId) {
       const sql = fs.readFileSync(schemaPath, 'utf8');
       await newPool.query(sql);
       console.log(`✅ Schema initialized for ${dbName}`);
+    }
+    
+    if (orgs.length > 0) {
+      await newPool.query('INSERT IGNORE INTO organizations (id, name, slug, db_name) VALUES (?, ?, ?, ?)', [orgId, orgs[0].name, orgs[0].slug, dbName]);
     }
     
     pools[cacheKey] = newPool;

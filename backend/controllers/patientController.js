@@ -32,9 +32,32 @@ exports.getAllPatients = async (req, res) => {
 
         const rows = await safeQuery(queryStr, params);
 
+        // Fetch recent visits for these patients
+        const patientIds = rows.map(r => r.patient_profile_id).filter(Boolean);
+        let recentVisitsMap = {};
+        if (patientIds.length > 0) {
+            const placeholders = patientIds.map((_, i) => `$${i+1}`).join(',');
+            const visitsQuery = `SELECT * FROM patient_visits WHERE patient_id IN (${placeholders}) ORDER BY visit_date DESC`;
+            const visitsRows = await safeQuery(visitsQuery, patientIds);
+            visitsRows.forEach(v => {
+                if (!recentVisitsMap[v.patient_id]) {
+                    // Try to parse notes if it's JSON
+                    if (v.notes && v.notes.startsWith('{')) {
+                        try { v.parsed_notes = JSON.parse(v.notes); } catch(e){}
+                    }
+                    if (v.investigation_orders) {
+                        try { v.parsed_investigations = typeof v.investigation_orders === 'string' ? JSON.parse(v.investigation_orders) : v.investigation_orders; } catch(e){}
+                    }
+                    recentVisitsMap[v.patient_id] = v;
+                }
+            });
+        }
+
         const enrichedData = rows.map(row => {
             const { patient_profile_id, blood_group, dob, medical_history, emergency_contact, patient_type, assigned_doctor_id, doctor_name, ...userObj } = row;
             
+            const recent_visit = patient_profile_id ? recentVisitsMap[patient_profile_id] : null;
+
             const patientsArr = patient_profile_id ? [{
                 id: patient_profile_id, 
                 blood_group, 
@@ -43,7 +66,8 @@ exports.getAllPatients = async (req, res) => {
                 emergency_contact, 
                 patient_type: patient_type || 'Outpatient', 
                 assigned_doctor_id,
-                assigned_doctor: { full_name: doctor_name || 'Unknown' }
+                assigned_doctor: { full_name: doctor_name || 'Unknown' },
+                recent_visit: recent_visit
             }] : [];
 
             return {
@@ -79,10 +103,14 @@ exports.getPatientDetails = async (req, res) => {
             SELECT u.*, p.*, p.id as patient_profile_id
             FROM users u
             LEFT JOIN patients p ON u.id = p.user_id
-            WHERE p.id = $1 AND u.organization_id = $2
+            WHERE (u.id = $1 OR p.id = $1) AND u.organization_id = $2
         `;
+        console.log('Fetching patient details for ID:', id, 'Org:', orgId);
         const { rows } = await directDb.query(query, [id, orgId]);
-        if (rows.length === 0) return res.status(404).json({ error: 'Patient not found' });
+        if (rows.length === 0) {
+            console.log('No patient found matching the query');
+            return res.status(404).json({ error: 'Patient not found' });
+        }
         
         const patientData = rows[0];
         

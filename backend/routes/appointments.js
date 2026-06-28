@@ -6,5 +6,6 @@ router.post('/book', appointmentController.bookAppointment);
 router.get('/my/:userId', appointmentController.getMyAppointments);
 router.get('/doctor/:userId', appointmentController.getDoctorAppointments);
 router.get('/all', appointmentController.getAllAppointments); // Admin/Doctor usage
+router.put('/:id/status', appointmentController.updateStatus);
 
 module.exports = router;

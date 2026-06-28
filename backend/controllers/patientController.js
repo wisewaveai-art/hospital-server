@@ -103,10 +103,10 @@ exports.getPatientDetails = async (req, res) => {
             SELECT u.*, p.*, p.id as patient_profile_id
             FROM users u
             LEFT JOIN patients p ON u.id = p.user_id
-            WHERE (u.id = $1 OR p.id = $1) AND u.organization_id = $2
+            WHERE (u.id = $1 OR p.id = $2) AND u.organization_id = $3
         `;
         console.log('Fetching patient details for ID:', id, 'Org:', orgId);
-        const { rows } = await directDb.query(query, [id, orgId]);
+        const { rows } = await directDb.query(query, [id, id, orgId]);
         if (rows.length === 0) {
             console.log('No patient found matching the query');
             return res.status(404).json({ error: 'Patient not found' });
@@ -121,7 +121,8 @@ exports.getPatientDetails = async (req, res) => {
 
         res.json(patientData);
     } catch (err) {
-        res.status(500).json({ error: 'Server error' });
+        console.error('getPatientDetails error:', err);
+        res.status(500).json({ error: 'Server error: ' + err.message });
     }
 };
 

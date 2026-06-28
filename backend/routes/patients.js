@@ -9,6 +9,7 @@ router.put('/:id', patientController.updatePatient);
 router.delete('/:id', patientController.deletePatient);
 router.post('/visit', patientController.addVisitRecord);
 router.post('/prescription', patientController.addPrescription);
+router.post('/consultation', patientController.saveConsultation);
 router.get('/id/:userId', patientController.getPatientIdByUserId);
 router.post('/quick-add', patientController.quickAddPatient);
 

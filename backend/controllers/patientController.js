@@ -94,7 +94,8 @@ exports.updatePatient = async (req, res) => {
         const { id } = req.params; // this is user id
         const {
             full_name, email, phone, address, 
-            blood_group, dob, emergency_contact, medical_history, patient_type, assigned_doctor_id
+            blood_group, dob, emergency_contact, medical_history, patient_type, assigned_doctor_id,
+            allergies, chronic_diseases, current_medications, insurance_provider, insurance_number
         } = req.body;
 
         const orgId = req.organizationId;
@@ -112,16 +113,17 @@ exports.updatePatient = async (req, res) => {
         
         if (checkProfile.rows.length === 0) {
             await directDb.query(
-                `INSERT INTO patients (user_id, organization_id, blood_group, dob, emergency_contact, medical_history, patient_type, assigned_doctor_id)
-                 VALUES ($1, (SELECT organization_id FROM users WHERE id=$2), $3, $4, $5, $6, $7, $8)`,
-                 [id, id, blood_group, dobVal, emergency_contact, medical_history, patient_type, docVal]
+                `INSERT INTO patients (user_id, organization_id, blood_group, dob, emergency_contact, medical_history, patient_type, assigned_doctor_id, allergies, chronic_diseases, current_medications, insurance_provider, insurance_number)
+                 VALUES ($1, (SELECT organization_id FROM users WHERE id=$2), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+                 [id, id, blood_group, dobVal, emergency_contact, medical_history, patient_type, docVal, allergies, chronic_diseases, current_medications, insurance_provider, insurance_number]
             );
         } else {
             await directDb.query(
                 `UPDATE patients SET 
-                 blood_group=$1, dob=$2, emergency_contact=$3, medical_history=$4, patient_type=$5, assigned_doctor_id=$6
-                 WHERE user_id=$7`,
-                 [blood_group, dobVal, emergency_contact, medical_history, patient_type, docVal, id]
+                 blood_group=$1, dob=$2, emergency_contact=$3, medical_history=$4, patient_type=$5, assigned_doctor_id=$6,
+                 allergies=$7, chronic_diseases=$8, current_medications=$9, insurance_provider=$10, insurance_number=$11
+                 WHERE user_id=$12`,
+                 [blood_group, dobVal, emergency_contact, medical_history, patient_type, docVal, allergies, chronic_diseases, current_medications, insurance_provider, insurance_number, id]
             );
         }
 
@@ -181,6 +183,40 @@ exports.addPrescription = async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Failed to add prescription' });
+    }
+};
+
+exports.saveConsultation = async (req, res) => {
+    try {
+        const orgId = req.organizationId;
+        const { patient_id, doctor_id, diagnosis, secondary_diagnosis, prescription_details, notes, investigation_orders, referral_to, follow_up_date } = req.body;
+        
+        // Resolve patient ID (frontend might send user.id)
+        const patientLookup = await directDb.query('SELECT id FROM patients WHERE user_id=$1 OR id=$2 LIMIT 1', [patient_id, patient_id]);
+        if (patientLookup.rows.length === 0) return res.status(404).json({ error: 'Patient profile not found' });
+        const actualPatientId = patientLookup.rows[0].id;
+        
+        // Resolve doctor ID (frontend sends user.id from localStorage)
+        const doctorLookup = await directDb.query('SELECT id FROM doctors WHERE user_id=$1 OR id=$2 LIMIT 1', [doctor_id, doctor_id]);
+        if (doctorLookup.rows.length === 0) return res.status(404).json({ error: 'Doctor profile not found' });
+        const actualDoctorId = doctorLookup.rows[0].id;
+
+        // 1. Create a Visit record with all the consultation details
+        const query = `
+            INSERT INTO patient_visits 
+            (organization_id, patient_id, doctor_id, diagnosis, secondary_diagnosis, notes, investigation_orders, referral_to, next_visit_date)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *
+        `;
+        const { rows } = await directDb.query(query, [
+            orgId, actualPatientId, actualDoctorId, diagnosis, secondary_diagnosis, 
+            JSON.stringify({ clinical_notes: notes, prescription: prescription_details }), 
+            JSON.stringify(investigation_orders || []), referral_to, follow_up_date || null
+        ]);
+        
+        res.json({ message: 'Consultation saved successfully', visit: rows[0] });
+    } catch (err) {
+        console.error('Save Consultation Error:', err);
+        res.status(500).json({ error: 'Failed to save consultation' });
     }
 };
 exports.getPatientIdByUserId = async (req, res) => {

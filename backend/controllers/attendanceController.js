@@ -267,3 +267,53 @@ exports.getMyLeaves = async (req, res) => {
     }
 };
 
+exports.getStaffStatusToday = async (req, res) => {
+    try {
+        const orgId = req.organizationId;
+        const today = new Date().toISOString().split('T')[0];
+
+        const queryStr = `
+            SELECT u.id, u.full_name, u.role, u.email,
+                   a.id as attendance_id, a.check_in_time, a.status
+            FROM users u
+            LEFT JOIN attendance a ON u.id = a.user_id AND a.date = $1
+            WHERE u.organization_id = $2 AND u.role != 'patient'
+            ORDER BY u.full_name ASC
+        `;
+        const { rows } = await directDb.query(queryStr, [today, orgId]);
+        res.json(rows);
+    } catch (err) {
+        console.error('Error fetching staff status:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+exports.bulkCheckIn = async (req, res) => {
+    try {
+        const { userIds } = req.body;
+        const orgId = req.organizationId;
+        const today = new Date().toISOString().split('T')[0];
+        const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+        if (!Array.isArray(userIds) || userIds.length === 0) {
+            return res.status(400).json({ error: 'userIds array is required' });
+        }
+
+        for (const userId of userIds) {
+            const check = await directDb.query('SELECT id FROM attendance WHERE user_id = $1 AND date = $2', [userId, today]);
+            if (check.rows.length === 0) {
+                const attendId = require('crypto').randomUUID();
+                await directDb.query(
+                    `INSERT INTO attendance (id, organization_id, user_id, date, check_in_time, status) 
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [attendId, orgId, userId, today, now, 'Present']
+                );
+            }
+        }
+        res.json({ message: 'Bulk check-in successful' });
+    } catch (err) {
+        console.error('Error in bulk check-in:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+

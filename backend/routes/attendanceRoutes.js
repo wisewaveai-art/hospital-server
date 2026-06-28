@@ -4,6 +4,8 @@ const attendanceController = require('../controllers/attendanceController');
 
 router.get('/today', attendanceController.getTodayAttendance);
 router.get('/all', attendanceController.getAllAttendance);
+router.get('/staff-status', attendanceController.getStaffStatusToday);
+router.post('/bulk-check-in', attendanceController.bulkCheckIn);
 router.post('/check-in', attendanceController.checkIn);
 router.post('/check-out', attendanceController.checkOut);
 router.get('/active', attendanceController.getActiveStaff);

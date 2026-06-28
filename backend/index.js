@@ -59,6 +59,7 @@ const instrumentRoutes = require('./routes/instruments');
 const roomRoutes = require('./routes/rooms');
 const serviceRoutes = require('./routes/services');
 const appointmentRoutes = require('./routes/appointments');
+const branchRoutes = require('./routes/branches');
 const labRoutes = require('./routes/labRoutes');
 
 app.use('/api/organizations', require('./routes/organizations'));
@@ -73,6 +74,7 @@ app.use('/api/instruments', instrumentRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/appointments', appointmentRoutes);
+app.use('/api/branches', branchRoutes);
 app.use('/api/lab', labRoutes);
 app.use('/api/attendance', require('./routes/attendanceRoutes'));
 app.use('/api/settings', require('./routes/settingsRoutes'));

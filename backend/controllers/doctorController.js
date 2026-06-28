@@ -4,15 +4,20 @@ const directDb = require('../utils/directDb');
 exports.getAllDoctors = async (req, res) => {
     try {
         const orgId = req.organizationId;
-        let userQuery = 'SELECT id, full_name, email, phone, address, gender, organization_id FROM users WHERE role = $1';
+        let userQuery = `
+            SELECT u.id, u.full_name, u.email, u.phone, u.address, u.gender, u.organization_id, o.name as org_name 
+            FROM users u 
+            LEFT JOIN organizations o ON u.organization_id = o.id
+            WHERE u.role = $1
+        `;
         let userParams = ['doctor'];
         
         if (orgId && req.user?.role !== 'superadmin') {
-            userQuery += ' AND organization_id = $2';
+            userQuery += ' AND u.organization_id = $2';
             userParams.push(orgId);
         }
         
-        userQuery += ' ORDER BY full_name ASC';
+        userQuery += ' ORDER BY u.full_name ASC';
 
         // 1. Fetch users
         const { rows: users } = await directDb.query(userQuery, userParams);
@@ -24,7 +29,7 @@ exports.getAllDoctors = async (req, res) => {
         // 2. Fetch profiles
         const userIds = users.map(u => u.id);
         const placeholders = userIds.map((_, i) => `$${i + 1}`).join(',');
-        const profileQuery = `SELECT id, user_id, specialization, bio, availability, website_url, department, designation FROM doctors WHERE user_id IN (${placeholders})`;
+        const profileQuery = `SELECT id, user_id, branch_id, specialization, bio, availability, website_url, department, designation FROM doctors WHERE user_id IN (${placeholders})`;
         
         const { rows: profiles } = await directDb.query(profileQuery, userIds);
 
@@ -33,11 +38,19 @@ exports.getAllDoctors = async (req, res) => {
             profiles.forEach(p => { profilesMap[p.user_id] = p; });
         }
 
-        // 3. Merge
-        const enrichedData = users.map(user => {
+        // 3. Merge and Filter by Branch if requested
+        const { branch_id } = req.query;
+        let enrichedData = users.map(user => {
             user.doctors = profilesMap[user.id] ? [profilesMap[user.id]] : [];
             return user;
         });
+
+        if (branch_id) {
+            enrichedData = enrichedData.filter(user => 
+                user.doctors.length > 0 && 
+                (user.doctors[0].branch_id === branch_id || user.doctors[0].branch_id === null)
+            );
+        }
 
         res.json(enrichedData);
     } catch (err) {

@@ -73,6 +73,7 @@ exports.createPatientProfile = async (req, res) => {
 
 exports.getPatientDetails = async (req, res) => {
     try {
+        const { id } = req.params;
         const orgId = req.organizationId;
         const query = `
             SELECT u.*, p.*, p.id as patient_profile_id

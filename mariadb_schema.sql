@@ -23,6 +23,18 @@ ALTER TABLE organizations ADD COLUMN IF NOT EXISTS db_name VARCHAR(100) AFTER cu
 
 INSERT IGNORE INTO organizations (id, name, slug, db_name) VALUES ('0001-0000-00001', 'Wise Health Center', 'main', 'wisehospital');
 
+-- Branches
+CREATE TABLE IF NOT EXISTS branches (
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    organization_id CHAR(36),
+    name VARCHAR(255) NOT NULL,
+    address TEXT,
+    contact_number VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+);
+
 -- Users
 CREATE TABLE IF NOT EXISTS users (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -78,6 +90,7 @@ CREATE TABLE IF NOT EXISTS patients (
 CREATE TABLE IF NOT EXISTS doctors (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
     organization_id CHAR(36),
+    branch_id CHAR(36) NULL,
     user_id CHAR(36),
     specialization VARCHAR(255),
     bio TEXT,
@@ -90,6 +103,7 @@ CREATE TABLE IF NOT EXISTS doctors (
     bank_account_details TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE SET NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
@@ -136,6 +150,7 @@ CREATE TABLE IF NOT EXISTS medicines (
 CREATE TABLE IF NOT EXISTS appointments (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
     organization_id CHAR(36),
+    branch_id CHAR(36) NULL,
     patient_user_id CHAR(36),
     doctor_id CHAR(36),
     appointment_date DATETIME,
@@ -143,6 +158,7 @@ CREATE TABLE IF NOT EXISTS appointments (
     status VARCHAR(50) DEFAULT 'scheduled',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE SET NULL,
     FOREIGN KEY (patient_user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (doctor_id) REFERENCES doctors(id) ON DELETE CASCADE
 );

@@ -12,12 +12,12 @@ const safeQuery = async (queryStr, params = []) => {
 
 exports.bookAppointment = async (req, res) => {
     try {
-        const { patient_user_id, doctor_id, appointment_date, reason } = req.body;
+        const { patient_user_id, doctor_id, appointment_date, reason, branch_id } = req.body;
         const orgId = req.organizationId;
 
         await directDb.query(
-            'INSERT INTO appointments (organization_id, patient_user_id, doctor_id, appointment_date, reason, status) VALUES ($1, $2, $3, $4, $5, $6)',
-            [orgId, patient_user_id, doctor_id, appointment_date, reason, 'scheduled']
+            'INSERT INTO appointments (organization_id, branch_id, patient_user_id, doctor_id, appointment_date, reason, status) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            [orgId, branch_id || null, patient_user_id, doctor_id, appointment_date, reason, 'scheduled']
         );
 
         const { rows } = await directDb.query(

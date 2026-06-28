@@ -63,6 +63,12 @@ exports.getAllUsers = async (req, res) => {
             params.push(orgId);
         }
         
+        const roleFilter = req.query.role;
+        if (roleFilter) {
+            params.push(roleFilter);
+            queryStr += ` AND u.role = $${params.length}`;
+        }
+        
         queryStr += ' ORDER BY u.created_at DESC';
 
         const { rows } = await directDb.query(queryStr, params);

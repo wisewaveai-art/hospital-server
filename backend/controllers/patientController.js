@@ -229,9 +229,10 @@ exports.saveConsultation = async (req, res) => {
         const { patient_id, doctor_id, diagnosis, secondary_diagnosis, prescription_details, notes, investigation_orders, referral_to, follow_up_date } = req.body;
         
         // Resolve patient ID (frontend might send user.id)
-        const patientLookup = await directDb.query('SELECT id FROM patients WHERE user_id=$1 OR id=$2 LIMIT 1', [patient_id, patient_id]);
+        const patientLookup = await directDb.query('SELECT id, user_id FROM patients WHERE user_id=$1 OR id=$2 LIMIT 1', [patient_id, patient_id]);
         if (patientLookup.rows.length === 0) return res.status(404).json({ error: 'Patient profile not found' });
         const actualPatientId = patientLookup.rows[0].id;
+        const actualPatientUserId = patientLookup.rows[0].user_id;
         
         // Resolve doctor ID (frontend sends user.id from localStorage)
         const doctorLookup = await directDb.query('SELECT id FROM doctors WHERE user_id=$1 OR id=$2 LIMIT 1', [doctor_id, doctor_id]);
@@ -249,6 +250,17 @@ exports.saveConsultation = async (req, res) => {
             JSON.stringify({ clinical_notes: notes, prescription: prescription_details }), 
             JSON.stringify(investigation_orders || []), referral_to, follow_up_date || null
         ]);
+        
+        // Auto-complete any pending appointments for this patient and doctor
+        try {
+            await directDb.query(`
+                UPDATE appointments 
+                SET status = 'Completed' 
+                WHERE patient_user_id = $1 AND doctor_id = $2 AND (status IS NULL OR status != 'Completed')
+            `, [actualPatientUserId, actualDoctorId]);
+        } catch(e) { 
+            console.error('Failed to auto-complete appointment:', e); 
+        }
         
         res.json({ message: 'Consultation saved successfully', visit: rows[0] });
     } catch (err) {
@@ -269,8 +281,9 @@ exports.getPatientIdByUserId = async (req, res) => {
 
 exports.quickAddPatient = async (req, res) => {
     try {
-        const { full_name, email, phone, gender } = req.body;
+        const { full_name, email, phone, gender, patient_type } = req.body;
         const orgId = req.organizationId;
+        const assignedType = patient_type || 'Outpatient';
 
         // 1. Check if user already exists
         const existingUser = await directDb.query('SELECT id, role FROM users WHERE email = $1', [email]);
@@ -300,7 +313,7 @@ exports.quickAddPatient = async (req, res) => {
             // Create Patient Profile
             await directDb.query(
                 'INSERT INTO patients (organization_id, user_id, patient_type) VALUES ($1, $2, $3)',
-                [orgId, userId, 'Outpatient']
+                [orgId, userId, assignedType]
             );
             const patientRes = await directDb.query('SELECT id FROM patients WHERE user_id = $1', [userId]);
             patientId = patientRes.rows[0].id;

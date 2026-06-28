@@ -29,7 +29,7 @@ exports.getAllDoctors = async (req, res) => {
         // 2. Fetch profiles
         const userIds = users.map(u => u.id);
         const placeholders = userIds.map((_, i) => `$${i + 1}`).join(',');
-        const profileQuery = `SELECT id, user_id, branch_id, specialization, bio, availability, website_url, department, designation, doctor_code, license_number FROM doctors WHERE user_id IN (${placeholders})`;
+        const profileQuery = `SELECT id, user_id, branch_id, specialization, bio, availability, website_url, department, designation, doctor_code, license_number, base_salary, payment_type, bank_account_details, created_at as joined_date FROM doctors WHERE user_id IN (${placeholders})`;
         
         const { rows: profiles } = await directDb.query(profileQuery, userIds);
 
@@ -66,7 +66,7 @@ exports.getDoctorProfile = async (req, res) => {
         const { id } = req.params; // this is user id
         const query = `
             SELECT u.id, u.full_name, u.email, u.phone, u.address, u.gender, u.organization_id, o.name as org_name,
-                   d.department, d.designation, d.specialization, d.bio, d.availability, d.doctor_code, d.license_number
+                   d.department, d.designation, d.specialization, d.bio, d.availability, d.doctor_code, d.license_number, d.base_salary, d.payment_type, d.bank_account_details, d.created_at as joined_date
             FROM users u
             LEFT JOIN organizations o ON u.organization_id = o.id
             LEFT JOIN doctors d ON u.id = d.user_id
@@ -87,7 +87,8 @@ exports.updateDoctor = async (req, res) => {
         const { id } = req.params;
         const {
             full_name, email, phone, address, gender,
-            department, designation, specialization, bio, availability, doctor_code, license_number
+            department, designation, specialization, bio, availability, doctor_code, license_number,
+            base_salary, payment_type, bank_account_details
         } = req.body;
 
         const orgId = req.organizationId;
@@ -99,8 +100,8 @@ exports.updateDoctor = async (req, res) => {
 
         // 2. Update Doctors Table
         await directDb.query(
-            'UPDATE doctors SET department=$1, designation=$2, specialization=$3, bio=$4, availability=$5, doctor_code=$6, license_number=$7 WHERE user_id=$8 AND organization_id=$9',
-            [department, designation, specialization, bio, availability, doctor_code, license_number, id, orgId]
+            'UPDATE doctors SET department=$1, designation=$2, specialization=$3, bio=$4, availability=$5, doctor_code=$6, license_number=$7, base_salary=$8, payment_type=$9, bank_account_details=$10 WHERE user_id=$11 AND organization_id=$12',
+            [department, designation, specialization, bio, availability, doctor_code, license_number, base_salary || 0, payment_type || 'monthly', bank_account_details, id, orgId]
         );
 
         res.json({ message: 'Doctor profile updated successfully' });

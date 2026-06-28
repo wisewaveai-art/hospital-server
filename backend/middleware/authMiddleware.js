@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key';
 
-const authMiddleware = (req, res, next) => {
+const authMiddleware = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         // Some endpoints might be public, but we attach user if token exists
@@ -14,8 +14,15 @@ const authMiddleware = (req, res, next) => {
         req.user = decoded;
         
         // If organization_id is in token, it takes precedence for authenticated sessions
-        if (decoded.organization_id) {
+        if (decoded.organization_id && decoded.organization_id !== req.organizationId) {
             req.organizationId = decoded.organization_id;
+            const pool = require('../db');
+            const tenantPool = await pool.getTenantDb(req.organizationId);
+            req.db = tenantPool;
+            
+            return pool.dbStorage.run(tenantPool, () => {
+                next();
+            });
         }
         
         next();

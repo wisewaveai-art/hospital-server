@@ -30,6 +30,10 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use((req, res, next) => {
+    console.log(`[REQUEST] ${req.method} ${req.originalUrl}`);
+    next();
+});
 
 const tenantHandler = require('./middleware/tenantHandler');
 const authMiddleware = require('./middleware/authMiddleware');

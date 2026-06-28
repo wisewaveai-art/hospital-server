@@ -5,7 +5,8 @@ exports.recordVitals = async (req, res) => {
         const orgId = req.organizationId;
         const {
             patient_id, blood_pressure, heart_rate, temperature,
-            oxygen_saturation, respiratory_rate, weight, height, notes
+            oxygen_saturation, respiratory_rate, weight, height, notes,
+            blood_group, medical_history
         } = req.body;
         
         // Ensure user is logged in
@@ -15,6 +16,29 @@ exports.recordVitals = async (req, res) => {
         
         const recorded_by = req.user.id; // Nurse or Doctor ID
         
+        // Update Blood Group and Medical History in the patients table if provided
+        if (blood_group !== undefined || medical_history !== undefined) {
+            const updateParts = [];
+            const updateParams = [];
+            let pIndex = 1;
+            
+            if (blood_group !== undefined) {
+                updateParts.push(`blood_group = $${pIndex++}`);
+                updateParams.push(blood_group || null);
+            }
+            if (medical_history !== undefined) {
+                updateParts.push(`medical_history = $${pIndex++}`);
+                updateParams.push(medical_history || null);
+            }
+            
+            if (updateParts.length > 0) {
+                updateParams.push(patient_id);
+                updateParams.push(orgId);
+                const updateQuery = `UPDATE patients SET ${updateParts.join(', ')} WHERE id = $${pIndex++} AND organization_id = $${pIndex}`;
+                await directDb.query(updateQuery, updateParams);
+            }
+        }
+
         const query = `
             INSERT INTO patient_vitals 
             (organization_id, patient_id, recorded_by, blood_pressure, heart_rate, temperature, oxygen_saturation, respiratory_rate, weight, height, notes)

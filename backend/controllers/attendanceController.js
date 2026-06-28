@@ -290,10 +290,16 @@ exports.getStaffStatusToday = async (req, res) => {
 
 exports.bulkCheckIn = async (req, res) => {
     try {
-        const { userIds } = req.body;
+        const { userIds, checkInTime } = req.body;
         const orgId = req.organizationId;
         const today = new Date().toISOString().split('T')[0];
-        const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        
+        let now;
+        if (checkInTime) {
+            now = new Date(checkInTime).toISOString().slice(0, 19).replace('T', ' ');
+        } else {
+            now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        }
 
         if (!Array.isArray(userIds) || userIds.length === 0) {
             return res.status(400).json({ error: 'userIds array is required' });

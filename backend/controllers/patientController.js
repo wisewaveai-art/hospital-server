@@ -83,7 +83,15 @@ exports.getPatientDetails = async (req, res) => {
         `;
         const { rows } = await directDb.query(query, [id, orgId]);
         if (rows.length === 0) return res.status(404).json({ error: 'Patient not found' });
-        res.json(rows[0]);
+        
+        const patientData = rows[0];
+        
+        // Fetch previous visits
+        const visitsQuery = `SELECT * FROM patient_visits WHERE patient_id = $1 ORDER BY visit_date DESC LIMIT 5`;
+        const visitsRes = await directDb.query(visitsQuery, [id]);
+        patientData.previous_visits = visitsRes.rows;
+
+        res.json(patientData);
     } catch (err) {
         res.status(500).json({ error: 'Server error' });
     }

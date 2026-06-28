@@ -9,7 +9,7 @@ exports.updateUserRole = async (req, res) => {
         const { role } = req.body;
         const orgId = req.organizationId;
 
-        const validRoles = ['admin', 'subadmin', 'doctor', 'staff', 'patient', 'vendor', 'nurse', 'pharmacy'];
+        const validRoles = ['admin', 'subadmin', 'doctor', 'staff', 'patient', 'vendor', 'nurse', 'pharmacy', 'ambulance', 'hr', 'head_nurse', 'lab'];
         if (!validRoles.includes(role)) {
             return res.status(400).json({ error: 'Invalid role' });
         }
@@ -28,7 +28,7 @@ exports.updateUserRole = async (req, res) => {
             if (rowCount === 0) {
                 await directDb.query('INSERT INTO doctors (user_id, organization_id, full_name) VALUES ($1, $2, $3)', [id, orgId, user.full_name]);
             }
-        } else if (role === 'staff' || role === 'nurse' || role === 'pharmacy') {
+        } else if (['staff', 'nurse', 'pharmacy', 'ambulance', 'hr', 'head_nurse', 'lab'].includes(role)) {
             const { rowCount } = await directDb.query('SELECT id FROM staff WHERE user_id = $1', [id]);
             if (rowCount === 0) {
                 await directDb.query('INSERT INTO staff (user_id, organization_id, full_name, designation) VALUES ($1, $2, $3, $4)', [id, orgId, user.full_name, role]);
@@ -108,7 +108,7 @@ exports.createUser = async (req, res) => {
             return res.status(400).json({ error: 'All fields are required' });
         }
 
-        const validRoles = ['admin', 'subadmin', 'doctor', 'staff', 'patient', 'vendor', 'nurse', 'pharmacy'];
+        const validRoles = ['admin', 'subadmin', 'doctor', 'staff', 'patient', 'vendor', 'nurse', 'pharmacy', 'ambulance', 'hr', 'head_nurse', 'lab'];
         if (!validRoles.includes(role)) {
             return res.status(400).json({ error: 'Invalid role' });
         }
@@ -149,7 +149,7 @@ exports.createUser = async (req, res) => {
         // Ensure secondary profile creation (doctor, staff, etc.)
         if (role === 'doctor') {
             await directDb.query('INSERT INTO doctors (user_id, organization_id) VALUES ($1, $2)', [newUser.id, orgId]);
-        } else if (role === 'staff' || role === 'nurse' || role === 'pharmacy') {
+        } else if (['staff', 'nurse', 'pharmacy', 'ambulance', 'hr', 'head_nurse', 'lab'].includes(role)) {
             await directDb.query('INSERT INTO staff (user_id, organization_id) VALUES ($1, $2)', [newUser.id, orgId]);
         } else if (role === 'patient') {
             await directDb.query('INSERT INTO patients (user_id, organization_id, patient_type) VALUES ($1, $2, $3)', [newUser.id, orgId, 'Outpatient']);

@@ -5,11 +5,12 @@ exports.getAllStaff = async (req, res) => {
     try {
         const orgId = req.organizationId;
         let queryStr = `
-            SELECT u.id, u.full_name, u.role, u.email, u.phone, 
+            SELECT u.id, u.full_name, u.role, u.email, u.phone, u.organization_id, o.name as org_name,
                    s.designation, s.shift_start, s.shift_end, s.joined_date
             FROM users u
+            LEFT JOIN organizations o ON u.organization_id = o.id
             LEFT JOIN staff s ON u.id = s.user_id
-            WHERE u.role = 'staff'
+            WHERE u.role IN ('staff', 'nurse', 'pharmacy', 'subadmin')
         `;
         let params = [];
 
@@ -83,7 +84,7 @@ exports.getStaffProfile = async (req, res) => {
             FROM users u
             LEFT JOIN organizations o ON u.organization_id = o.id
             LEFT JOIN staff s ON u.id = s.user_id
-            WHERE u.id = $1 AND (u.role = 'staff' OR u.role = 'subadmin')
+            WHERE u.id = $1 AND u.role IN ('staff', 'subadmin', 'nurse', 'pharmacy')
         `;
         
         // Enforce tenant boundary if not superadmin

@@ -100,6 +100,41 @@ exports.updateProfilePic = async (req, res) => {
     }
 };
 
+exports.updatePassword = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { password } = req.body;
+        
+        if (!password || password.length < 6) {
+            return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+        }
+
+        const orgId = req.organizationId || (req.user && req.user.organization_id);
+
+        // Security check
+        if (req.user && req.user.role !== 'superadmin') {
+            const userCheck = await directDb.query('SELECT organization_id FROM users WHERE id = $1', [id]);
+            if (userCheck.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+            if (userCheck.rows[0].organization_id !== orgId) {
+                return res.status(403).json({ error: 'Unauthorized to modify this user' });
+            }
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const password_hash = await bcrypt.hash(password, salt);
+
+        await directDb.query(
+            'UPDATE users SET password_hash = $1 WHERE id = $2',
+            [password_hash, id]
+        );
+
+        res.json({ message: 'Password updated successfully' });
+    } catch(err) {
+        console.error('Error updating password:', err);
+        res.status(500).json({ error: 'Server error updating password' });
+    }
+};
+
 exports.createUser = async (req, res) => {
     try {
         const { full_name, email, password, role } = req.body;

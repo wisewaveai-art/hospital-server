@@ -330,3 +330,48 @@ exports.quickAddPatient = async (req, res) => {
     }
 };
 
+exports.uploadReport = async (req, res) => {
+    try {
+        const { id } = req.params; // patient_id
+        const { report_name, uploaded_by } = req.body;
+        const orgId = req.organizationId;
+        
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+        
+        const file_url = `/uploads/${req.file.filename}`;
+        
+        await directDb.query(
+            `INSERT INTO patient_reports (organization_id, patient_id, uploaded_by, report_name, file_url) 
+             VALUES ($1, $2, $3, $4, $5)`,
+            [orgId, id, uploaded_by || null, report_name || 'Investigation Report', file_url]
+        );
+        
+        res.json({ message: 'Report uploaded successfully', file_url });
+    } catch (err) {
+        console.error('Upload Report Error:', err);
+        res.status(500).json({ error: 'Failed to upload report' });
+    }
+};
+
+exports.getReports = async (req, res) => {
+    try {
+        const { id } = req.params; // patient_id
+        const orgId = req.organizationId;
+        
+        const { rows } = await directDb.query(
+            `SELECT r.*, u.full_name as uploaded_by_name 
+             FROM patient_reports r 
+             LEFT JOIN users u ON r.uploaded_by = u.id 
+             WHERE r.patient_id = $1 AND r.organization_id = $2
+             ORDER BY r.created_at DESC`,
+            [id, orgId]
+        );
+        
+        res.json(rows);
+    } catch (err) {
+        console.error('Get Reports Error:', err);
+        res.status(500).json({ error: 'Failed to fetch reports' });
+    }
+};

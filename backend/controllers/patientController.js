@@ -342,7 +342,8 @@ exports.uploadReport = async (req, res) => {
         
         const file_url = `/uploads/${req.file.filename}`;
         
-        await directDb.query(
+        const db = directDb.wrap(req.db);
+        await db.query(
             `INSERT INTO patient_reports (organization_id, patient_id, uploaded_by, report_name, file_url) 
              VALUES ($1, $2, $3, $4, $5)`,
             [orgId, id, uploaded_by || null, report_name || 'Investigation Report', file_url]
@@ -360,7 +361,8 @@ exports.getReports = async (req, res) => {
         const { id } = req.params; // patient_id
         const orgId = req.organizationId;
         
-        const { rows } = await directDb.query(
+        const db = directDb.wrap(req.db);
+        const { rows } = await db.query(
             `SELECT r.*, u.full_name as uploaded_by_name 
              FROM patient_reports r 
              LEFT JOIN users u ON r.uploaded_by = u.id 

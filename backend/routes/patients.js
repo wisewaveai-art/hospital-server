@@ -25,6 +25,7 @@ router.get('/', patientController.getAllPatients);
 router.post('/profile', patientController.createPatientProfile);
 router.get('/:id/details', patientController.getPatientDetails);
 router.put('/:id', patientController.updatePatient);
+router.patch('/:id/type', patientController.updatePatientType);
 router.delete('/:id', patientController.deletePatient);
 router.post('/visit', patientController.addVisitRecord);
 router.post('/prescription', patientController.addPrescription);

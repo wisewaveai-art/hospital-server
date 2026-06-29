@@ -171,6 +171,24 @@ exports.updatePatient = async (req, res) => {
      }
 };
 
+exports.updatePatientType = async (req, res) => {
+    try {
+        const { id } = req.params; // user id
+        const { patient_type } = req.body;
+        if (!patient_type) {
+            return res.status(400).json({ error: 'patient_type is required' });
+        }
+        await directDb.query(
+            'UPDATE patients SET patient_type=$1 WHERE user_id=$2',
+            [patient_type, id]
+        );
+        res.json({ message: 'Patient type updated successfully' });
+    } catch (err) {
+        console.error('Error updating patient type:', err);
+        res.status(500).json({ error: 'Server error updating patient type' });
+    }
+};
+
 exports.deletePatient = async (req, res) => {
     try {
         const { id } = req.params; // user id

@@ -97,17 +97,24 @@ exports.updateRoom = async (req, res) => {
 // Allocate Room (Check In)
 exports.allocateRoom = async (req, res) => {
     try {
-        const { room_id, patient_id, guest_name, guest_contact, notes } = req.body;
+        const { room_id, patient_id, guest_name, guest_contact, notes, admitting_doctor_id, reason_for_admission } = req.body;
         const orgId = req.organizationId;
+
+        // Try to resolve patient_id if it's actually a user_id
+        let actualPatientId = patient_id;
+        if (patient_id) {
+            const { rows: pRows } = await directDb.query('SELECT id FROM patients WHERE user_id = $1 OR id = $2', [patient_id, patient_id]);
+            if (pRows.length > 0) actualPatientId = pRows[0].id;
+        }
 
         const { rows: roomRows } = await directDb.query('SELECT status FROM rooms WHERE id = $1 AND organization_id = $2', [room_id, orgId]);
         if (roomRows.length === 0) throw new Error('Room not found');
         if (roomRows[0].status === 'Occupied') return res.status(400).json({ error: 'Room is already occupied' });
 
         await directDb.query(
-            `INSERT INTO room_allocations (organization_id, room_id, patient_id, status, admission_date, guest_name, guest_contact, notes) 
-             VALUES ($1, $2, $3, 'active', NOW(), $4, $5, $6)`,
-            [orgId, room_id, patient_id, guest_name, guest_contact, notes]
+            `INSERT INTO room_allocations (organization_id, room_id, patient_id, status, admission_date, guest_name, guest_contact, notes, admitting_doctor_id, reason_for_admission) 
+             VALUES ($1, $2, $3, 'active', NOW(), $4, $5, $6, $7, $8)`,
+            [orgId, room_id, actualPatientId, guest_name, guest_contact, notes, admitting_doctor_id, reason_for_admission]
         );
 
         await directDb.query('UPDATE rooms SET status = $1 WHERE id = $2 AND organization_id = $3', ['Occupied', room_id, orgId]);

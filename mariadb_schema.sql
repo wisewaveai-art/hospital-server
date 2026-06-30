@@ -327,6 +327,15 @@ CREATE TABLE IF NOT EXISTS operations (
     FOREIGN KEY (doctor_id) REFERENCES doctors(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS operation_participants (
+    operation_id CHAR(36),
+    user_id CHAR(36),
+    role VARCHAR(50),
+    PRIMARY KEY (operation_id, user_id),
+    FOREIGN KEY (operation_id) REFERENCES operations(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 -- Instruments / Assets
 CREATE TABLE IF NOT EXISTS instruments (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),

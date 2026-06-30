@@ -13,27 +13,39 @@ const safeQuery = async (queryStr, params = []) => {
 exports.getAllPatients = async (req, res) => {
     try {
         const orgId = req.organizationId;
-        let queryStr = `
-            SELECT u.id, u.full_name, u.email, u.phone, u.address, u.created_at, u.organization_id, 
-                   p.id as patient_profile_id, p.blood_group, p.dob, p.medical_history, p.emergency_contact, p.patient_type, p.assigned_doctor_id, 
-                   doc.full_name as doctor_name
-            FROM users u
-            LEFT JOIN patients p ON u.id = p.user_id
-            LEFT JOIN users doc ON p.assigned_doctor_id = doc.id
-            WHERE u.role = 'patient'
-        `;
-        let params = [];
+        
+        const { rows: patients } = await directDb.query(
+            `SELECT u.id, u.email, u.full_name, u.phone, u.address, u.created_at,
+                    p.id as profile_id, p.blood_group, p.dob, p.medical_history, p.emergency_contact, p.patient_type,
+                    p.assigned_doctor_id, p.allergies, p.chronic_diseases, p.current_medications,
+                    p.insurance_provider, p.insurance_number, p.blood_pressure, p.sugar_level, p.injury_condition, p.insurance_coverage,
+                    d.id as doc_id, du.full_name as doctor_name
+             FROM users u
+             LEFT JOIN patients p ON u.id = p.user_id
+             LEFT JOIN doctors d ON p.assigned_doctor_id = d.id
+             LEFT JOIN users du ON d.user_id = du.id
+             WHERE u.role = 'patient' AND u.organization_id = $1
+             ORDER BY u.created_at DESC`,
+             [orgId]
+        );
+        
+        // fetch patient_relations
+        const { rows: allRelations } = await directDb.query(
+            `SELECT pr.patient_id, pr.related_user_id, pr.relation_type, u.full_name as related_name 
+             FROM patient_relations pr
+             JOIN users u ON pr.related_user_id = u.id
+             WHERE pr.organization_id = $1`, [orgId]
+        );
 
-        if (orgId && req.user?.role !== 'superadmin') {
-            queryStr += ' AND u.organization_id = $1';
-            params.push(orgId);
+        // Group relations by patient_id
+        const relationsByPatient = {};
+        for (const r of allRelations) {
+            if (!relationsByPatient[r.patient_id]) relationsByPatient[r.patient_id] = [];
+            relationsByPatient[r.patient_id].push(r);
         }
-        queryStr += ' ORDER BY u.created_at DESC';
-
-        const rows = await safeQuery(queryStr, params);
 
         // Fetch recent visits for these patients
-        const patientIds = rows.map(r => r.patient_profile_id).filter(Boolean);
+        const patientIds = patients.map(r => r.profile_id).filter(Boolean);
         let recentVisitsMap = {};
         if (patientIds.length > 0) {
             const placeholders = patientIds.map((_, i) => `$${i+1}`).join(',');
@@ -53,25 +65,42 @@ exports.getAllPatients = async (req, res) => {
             });
         }
 
-        const enrichedData = rows.map(row => {
-            const { patient_profile_id, blood_group, dob, medical_history, emergency_contact, patient_type, assigned_doctor_id, doctor_name, ...userObj } = row;
-            
-            const recent_visit = patient_profile_id ? recentVisitsMap[patient_profile_id] : null;
+        const enrichedData = patients.map(p => {
+            const recent_visit = p.profile_id ? recentVisitsMap[p.profile_id] : null;
 
-            const patientsArr = patient_profile_id ? [{
-                id: patient_profile_id, 
-                blood_group, 
-                dob, 
-                medical_history, 
-                emergency_contact, 
-                patient_type: patient_type || 'Outpatient', 
-                assigned_doctor_id,
-                assigned_doctor: { full_name: doctor_name || 'Unknown' },
+            const patientsArr = p.profile_id ? [{
+                id: p.profile_id, 
+                blood_group: p.blood_group, 
+                dob: p.dob, 
+                medical_history: p.medical_history, 
+                emergency_contact: p.emergency_contact, 
+                patient_type: p.patient_type || 'Outpatient', 
+                assigned_doctor_id: p.assigned_doctor_id,
+                allergies: p.allergies,
+                chronic_diseases: p.chronic_diseases,
+                current_medications: p.current_medications,
+                insurance_provider: p.insurance_provider,
+                insurance_number: p.insurance_number,
+                blood_pressure: p.blood_pressure,
+                sugar_level: p.sugar_level,
+                injury_condition: p.injury_condition,
+                insurance_coverage: p.insurance_coverage,
+                assigned_doctor: p.doc_id ? {
+                    id: p.doc_id,
+                    full_name: p.doctor_name
+                } : null,
+                relations: relationsByPatient[p.profile_id] || [],
                 recent_visit: recent_visit
             }] : [];
 
             return {
-                ...userObj,
+                id: p.id,
+                email: p.email,
+                full_name: p.full_name,
+                phone: p.phone,
+                address: p.address,
+                gender: p.gender,
+                created_at: p.created_at,
                 patients: patientsArr
             };
         });
@@ -132,7 +161,9 @@ exports.updatePatient = async (req, res) => {
         const {
             full_name, email, phone, address, 
             blood_group, dob, emergency_contact, medical_history, patient_type, assigned_doctor_id,
-            allergies, chronic_diseases, current_medications, insurance_provider, insurance_number
+            allergies, chronic_diseases, current_medications, insurance_provider, insurance_number,
+            blood_pressure, sugar_level, injury_condition, insurance_coverage,
+            relations // array of { related_user_id, relation_type }
         } = req.body;
 
         const orgId = req.organizationId;
@@ -148,20 +179,44 @@ exports.updatePatient = async (req, res) => {
 
         const checkProfile = await directDb.query('SELECT id FROM patients WHERE user_id=$1', [id]);
         
+        let patientProfileId = null;
+
         if (checkProfile.rows.length === 0) {
-            await directDb.query(
-                `INSERT INTO patients (user_id, organization_id, blood_group, dob, emergency_contact, medical_history, patient_type, assigned_doctor_id, allergies, chronic_diseases, current_medications, insurance_provider, insurance_number)
-                 VALUES ($1, (SELECT organization_id FROM users WHERE id=$2), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-                 [id, id, blood_group, dobVal, emergency_contact, medical_history, patient_type, docVal, allergies, chronic_diseases, current_medications, insurance_provider, insurance_number]
+            const insertResult = await directDb.query(
+                `INSERT INTO patients (user_id, organization_id, blood_group, dob, emergency_contact, medical_history, patient_type, assigned_doctor_id, allergies, chronic_diseases, current_medications, insurance_provider, insurance_number, blood_pressure, sugar_level, injury_condition, insurance_coverage)
+                 VALUES ($1, (SELECT organization_id FROM users WHERE id=$2), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+                 [id, id, blood_group, dobVal, emergency_contact, medical_history, patient_type, docVal, allergies, chronic_diseases, current_medications, insurance_provider, insurance_number, blood_pressure, sugar_level, injury_condition, insurance_coverage]
             );
+            
+            // Re-fetch to get the patient profile ID
+            const newProfile = await directDb.query('SELECT id FROM patients WHERE user_id=$1', [id]);
+            patientProfileId = newProfile.rows[0].id;
         } else {
+            patientProfileId = checkProfile.rows[0].id;
             await directDb.query(
                 `UPDATE patients SET 
                  blood_group=$1, dob=$2, emergency_contact=$3, medical_history=$4, patient_type=$5, assigned_doctor_id=$6,
-                 allergies=$7, chronic_diseases=$8, current_medications=$9, insurance_provider=$10, insurance_number=$11
-                 WHERE user_id=$12`,
-                 [blood_group, dobVal, emergency_contact, medical_history, patient_type, docVal, allergies, chronic_diseases, current_medications, insurance_provider, insurance_number, id]
+                 allergies=$7, chronic_diseases=$8, current_medications=$9, insurance_provider=$10, insurance_number=$11,
+                 blood_pressure=$12, sugar_level=$13, injury_condition=$14, insurance_coverage=$15
+                 WHERE user_id=$16`,
+                 [blood_group, dobVal, emergency_contact, medical_history, patient_type, docVal, allergies, chronic_diseases, current_medications, insurance_provider, insurance_number, blood_pressure, sugar_level, injury_condition, insurance_coverage, id]
             );
+        }
+
+        // Handle relations
+        if (Array.isArray(relations) && patientProfileId) {
+            // Delete existing relations for this patient
+            await directDb.query('DELETE FROM patient_relations WHERE patient_id=$1 AND organization_id=$2', [patientProfileId, orgId]);
+            // Insert new ones
+            for (let rel of relations) {
+                if (rel.related_user_id && rel.relation_type) {
+                    await directDb.query(
+                        `INSERT INTO patient_relations (organization_id, patient_id, related_user_id, relation_type) 
+                         VALUES ($1, $2, $3, $4)`,
+                        [orgId, patientProfileId, rel.related_user_id, rel.relation_type]
+                    );
+                }
+            }
         }
 
         res.json({ message: 'Patient updated successfully' });

@@ -105,6 +105,15 @@ exports.getAllPatients = async (req, res) => {
             };
         });
 
+        if (req.query.type === 'Discharged') {
+            const { rows: dischargedAllocations } = await directDb.query(
+                `SELECT DISTINCT patient_id FROM room_allocations WHERE status = 'discharged' AND organization_id = $1`, [orgId]
+            );
+            const dischargedPatientIds = new Set(dischargedAllocations.map(a => a.patient_id));
+            const filteredData = enrichedData.filter(p => p.patients && p.patients.length > 0 && dischargedPatientIds.has(p.patients[0].id));
+            return res.json(filteredData);
+        }
+
         res.json(enrichedData);
     } catch (err) {
         console.error('Error fetching patients:', err);

@@ -28,7 +28,7 @@ exports.getInvoices = async (req, res) => {
         const rows = await safeQuery(queryStr, [orgId]);
         
         const formatted = rows.map(r => {
-            const { patient_id, patient_name, ...inv } = r;
+            const { patient_name, ...inv } = r;
             return {
                 ...inv,
                 patient: patient_name ? patient_name : 'Unknown',
@@ -52,10 +52,12 @@ exports.createInvoice = async (req, res) => {
         const safeDiscount = discount || 0;
         const safeTax = tax_percentage || 0;
         
+        const safeDate = date ? new Date(date).toISOString().slice(0, 19).replace('T', ' ') : new Date().toISOString().slice(0, 19).replace('T', ' ');
+
         const { rows } = await directDb.query(
             `INSERT INTO invoices (organization_id, patient_id, amount, subtotal, discount, tax_percentage, notes, status, created_at, invoice_number) 
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-            [orgId, patient_id, safeTotal, safeSubtotal, safeDiscount, safeTax, notes || '', status || 'Pending', date || new Date(), 'INV-' + Math.floor(Math.random() * 100000)]
+            [orgId, patient_id, safeTotal, safeSubtotal, safeDiscount, safeTax, notes || '', status || 'Pending', safeDate, 'INV-' + Math.floor(Math.random() * 100000)]
         );
 
         const newInvoice = rows[0];

@@ -8,6 +8,7 @@ router.put('/:id', roomController.updateRoom);
 router.post('/allocate', roomController.allocateRoom);
 router.post('/discharge', roomController.dischargeRoom);
 router.get('/:id/history', roomController.getRoomHistory);
+router.get('/allocation/:patient_id', roomController.getActiveAllocation);
 
 router.delete('/:id', roomController.deleteRoom);
 

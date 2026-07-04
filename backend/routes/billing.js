@@ -4,6 +4,8 @@ const billingController = require('../controllers/billingController');
 
 router.get('/invoices', billingController.getInvoices);
 router.post('/invoices', billingController.createInvoice);
+router.get('/invoices/:id', billingController.getInvoiceDetails);
+router.put('/invoices/:id', billingController.updateInvoice);
 router.get('/payments', billingController.getPayments);
 router.post('/payments', billingController.addPayment);
 

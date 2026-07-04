@@ -134,7 +134,7 @@ exports.allocateRoom = async (req, res) => {
 // Discharge Room (Check Out)
 exports.dischargeRoom = async (req, res) => {
     try {
-        const { room_id, allocation_id } = req.body;
+        const { room_id, allocation_id, discharge_notes, discharge_condition } = req.body;
         const orgId = req.organizationId;
 
         let targetAllocId = allocation_id;
@@ -150,8 +150,8 @@ exports.dischargeRoom = async (req, res) => {
         if (!targetAllocId) return res.status(404).json({ error: 'No active allocation found' });
 
         await directDb.query(
-            'UPDATE room_allocations SET status = $1, discharge_date = NOW() WHERE id = $2 AND organization_id = $3',
-            ['discharged', targetAllocId, orgId]
+            'UPDATE room_allocations SET status = $1, discharge_date = NOW(), discharge_notes = $2, discharge_condition = $3 WHERE id = $4 AND organization_id = $5',
+            ['discharged', discharge_notes || null, discharge_condition || null, targetAllocId, orgId]
         );
 
         await directDb.query('UPDATE rooms SET status = $1 WHERE id = $2 AND organization_id = $3', ['Available', room_id, orgId]);
@@ -159,6 +159,35 @@ exports.dischargeRoom = async (req, res) => {
         res.json({ message: 'Discharged successfully' });
     } catch (err) {
         console.error('Error discharging room:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+exports.getActiveAllocation = async (req, res) => {
+    try {
+        const { patient_id } = req.params;
+        const orgId = req.organizationId;
+        
+        let actualPatientId = patient_id;
+        const { rows: pRows } = await directDb.query('SELECT id FROM patients WHERE user_id = $1 OR id = $2', [patient_id, patient_id]);
+        if (pRows.length > 0) actualPatientId = pRows[0].id;
+
+        const query = `
+            SELECT ra.*, r.price_per_day as charge_per_day, r.room_number, r.room_type as type
+            FROM room_allocations ra
+            JOIN rooms r ON ra.room_id = r.id
+            WHERE ra.patient_id = $1 AND ra.status = 'active' AND ra.organization_id = $2
+            ORDER BY ra.created_at DESC
+            LIMIT 1
+        `;
+        
+        const { rows } = await directDb.query(query, [actualPatientId, orgId]);
+        
+        if (rows.length === 0) return res.status(404).json({ error: 'No active allocation found' });
+        
+        res.json(rows[0]);
+    } catch (err) {
+        console.error('Error getting active allocation:', err);
         res.status(500).json({ error: 'Server error' });
     }
 };

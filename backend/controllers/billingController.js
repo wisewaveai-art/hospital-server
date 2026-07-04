@@ -45,17 +45,102 @@ exports.getInvoices = async (req, res) => {
 exports.createInvoice = async (req, res) => {
     try {
         const orgId = req.organizationId;
-        const { patient_id, amount, status, date } = req.body;
+        const { patient_id, amount, status, date, items, subtotal, discount, tax_percentage, notes } = req.body;
+        
+        const safeSubtotal = subtotal !== undefined ? subtotal : amount;
+        const safeTotal = amount;
+        const safeDiscount = discount || 0;
+        const safeTax = tax_percentage || 0;
         
         const { rows } = await directDb.query(
-            `INSERT INTO invoices (organization_id, patient_id, amount, status, created_at, invoice_number) 
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-            [orgId, patient_id, amount, status || 'Pending', date || new Date(), 'INV-' + Math.floor(Math.random() * 100000)]
+            `INSERT INTO invoices (organization_id, patient_id, amount, subtotal, discount, tax_percentage, notes, status, created_at, invoice_number) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+            [orgId, patient_id, safeTotal, safeSubtotal, safeDiscount, safeTax, notes || '', status || 'Pending', date || new Date(), 'INV-' + Math.floor(Math.random() * 100000)]
         );
 
-        res.status(201).json(rows[0]);
+        const newInvoice = rows[0];
+
+        if (items && Array.isArray(items) && items.length > 0) {
+            for (const item of items) {
+                await directDb.query(
+                    `INSERT INTO invoice_items (organization_id, invoice_id, description, quantity, unit_price, total_price)
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [orgId, newInvoice.id, item.description, item.quantity, item.unit_price, item.total_price]
+                );
+            }
+        }
+
+        res.status(201).json(newInvoice);
     } catch (err) {
+        console.error('Create invoice error:', err);
         res.status(500).json({ error: 'Server error creating invoice' });
+    }
+};
+
+exports.getInvoiceDetails = async (req, res) => {
+    try {
+        const orgId = req.organizationId;
+        const { id } = req.params;
+        
+        const invoiceRows = await safeQuery(
+            `SELECT i.*, p.id as patient_id, u.full_name as patient_name
+             FROM invoices i
+             LEFT JOIN patients p ON i.patient_id = p.id
+             LEFT JOIN users u ON p.user_id = u.id
+             WHERE i.id = $1 AND i.organization_id = $2`,
+            [id, orgId]
+        );
+        
+        if (invoiceRows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
+        
+        const invoice = invoiceRows[0];
+        
+        const items = await safeQuery(
+            `SELECT * FROM invoice_items WHERE invoice_id = $1 AND organization_id = $2 ORDER BY created_at ASC`,
+            [id, orgId]
+        );
+        
+        res.json({ ...invoice, items });
+    } catch (err) {
+        console.error('Get invoice details error:', err);
+        res.status(500).json({ error: 'Server error fetching invoice details' });
+    }
+};
+
+exports.updateInvoice = async (req, res) => {
+    try {
+        const orgId = req.organizationId;
+        const { id } = req.params;
+        const { amount, status, items, subtotal, discount, tax_percentage, notes } = req.body;
+        
+        const safeSubtotal = subtotal !== undefined ? subtotal : amount;
+        const safeTotal = amount;
+        const safeDiscount = discount || 0;
+        const safeTax = tax_percentage || 0;
+        
+        await directDb.query(
+            `UPDATE invoices 
+             SET amount = $1, subtotal = $2, discount = $3, tax_percentage = $4, notes = $5, status = $6
+             WHERE id = $7 AND organization_id = $8`,
+            [safeTotal, safeSubtotal, safeDiscount, safeTax, notes || '', status, id, orgId]
+        );
+        
+        if (items && Array.isArray(items)) {
+            await directDb.query(`DELETE FROM invoice_items WHERE invoice_id = $1 AND organization_id = $2`, [id, orgId]);
+            
+            for (const item of items) {
+                await directDb.query(
+                    `INSERT INTO invoice_items (organization_id, invoice_id, description, quantity, unit_price, total_price)
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [orgId, id, item.description, item.quantity, item.unit_price, item.total_price]
+                );
+            }
+        }
+        
+        res.json({ message: 'Invoice updated successfully' });
+    } catch (err) {
+        console.error('Update invoice error:', err);
+        res.status(500).json({ error: 'Server error updating invoice' });
     }
 };
 

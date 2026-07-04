@@ -250,12 +250,30 @@ CREATE TABLE IF NOT EXISTS invoices (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
     organization_id CHAR(36),
     patient_id CHAR(36),
+    subtotal DECIMAL(12,2) DEFAULT 0.00,
+    discount DECIMAL(12,2) DEFAULT 0.00,
+    tax_percentage DECIMAL(5,2) DEFAULT 0.00,
     amount DECIMAL(12,2) DEFAULT 0.00,
     status VARCHAR(50) DEFAULT 'Pending',
     invoice_number VARCHAR(100) UNIQUE,
+    notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
     FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+);
+
+-- Billing: Invoice Items
+CREATE TABLE IF NOT EXISTS invoice_items (
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    organization_id CHAR(36),
+    invoice_id CHAR(36),
+    description VARCHAR(255) NOT NULL,
+    quantity INT DEFAULT 1,
+    unit_price DECIMAL(10,2) DEFAULT 0.00,
+    total_price DECIMAL(10,2) DEFAULT 0.00,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
 );
 
 -- Billing: Payments
@@ -310,6 +328,8 @@ CREATE TABLE IF NOT EXISTS room_allocations (
     notes TEXT,
     admitting_doctor_id CHAR(36),
     reason_for_admission TEXT,
+    discharge_notes TEXT,
+    discharge_condition VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
     FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,

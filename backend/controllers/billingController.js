@@ -13,6 +13,8 @@ const safeQuery = async (queryStr, params = []) => {
 exports.getInvoices = async (req, res) => {
     try {
         const orgId = req.organizationId;
+        const userId = req.user?.id;
+        const userRole = req.user?.role?.toLowerCase();
         
         let queryStr = `
             SELECT i.*, 
@@ -22,10 +24,17 @@ exports.getInvoices = async (req, res) => {
             LEFT JOIN patients p ON i.patient_id = p.id
             LEFT JOIN users u ON p.user_id = u.id
             WHERE i.organization_id = $1
-            ORDER BY i.created_at DESC
         `;
+        const queryParams = [orgId];
+
+        if (userRole === 'patient') {
+            queryStr += ` AND u.id = $2`;
+            queryParams.push(userId);
+        }
+
+        queryStr += ` ORDER BY i.created_at DESC`;
         
-        const rows = await safeQuery(queryStr, [orgId]);
+        const rows = await safeQuery(queryStr, queryParams);
         
         const formatted = rows.map(r => {
             const { patient_name, ...inv } = r;

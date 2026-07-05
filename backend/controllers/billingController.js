@@ -195,7 +195,7 @@ exports.addPayment = async (req, res) => {
 exports.pharmacyCheckout = async (req, res) => {
     try {
         const orgId = req.organizationId;
-        const { phone, full_name, cart, subtotal, discount, tax_percentage, total } = req.body;
+        const { phone, full_name, cart, subtotal, discount, tax_percentage, extra_charge_name, extra_charge_amount, total } = req.body;
         
         let patient_id = null;
 
@@ -252,6 +252,15 @@ exports.pharmacyCheckout = async (req, res) => {
                 `INSERT INTO invoice_items (organization_id, invoice_id, description, quantity, unit_price, total_price)
                  VALUES ($1, $2, $3, $4, $5, $6)`,
                 [orgId, newInvoice.id, item.name, item.quantity, item.price, item.quantity * item.price]
+            );
+        }
+
+        // 5. Add Extra Charge Item
+        if (extra_charge_amount && extra_charge_amount > 0) {
+            await directDb.query(
+                `INSERT INTO invoice_items (organization_id, invoice_id, description, quantity, unit_price, total_price)
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [orgId, newInvoice.id, extra_charge_name || 'Additional Charge', 1, extra_charge_amount, extra_charge_amount]
             );
         }
 

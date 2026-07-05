@@ -230,11 +230,11 @@ exports.pharmacyCheckout = async (req, res) => {
 
         // 2. Validate Stock and Deduct
         for (const item of cart) {
-            const medRes = await directDb.query('SELECT stock_level FROM medicines WHERE id = $1 AND organization_id = $2', [item.id, orgId]);
-            if (medRes.rows.length === 0 || medRes.rows[0].stock_level < item.quantity) {
+            const medRes = await directDb.query('SELECT quantity FROM medicines WHERE id = $1 AND organization_id = $2', [item.id, orgId]);
+            if (medRes.rows.length === 0 || medRes.rows[0].quantity < item.quantity) {
                 return res.status(400).json({ error: `Insufficient stock for ${item.name}` });
             }
-            await directDb.query('UPDATE medicines SET stock_level = stock_level - $1 WHERE id = $2', [item.quantity, item.id]);
+            await directDb.query('UPDATE medicines SET quantity = quantity - $1 WHERE id = $2', [item.quantity, item.id]);
         }
 
         // 3. Create Invoice

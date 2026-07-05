@@ -74,6 +74,34 @@ exports.getLowStockMedicines = async (req, res) => {
     }
 };
 
+// Get Expired Medicines
+exports.getExpiredMedicines = async (req, res) => {
+    try {
+        const orgId = req.organizationId;
+        const queryStr = `
+            SELECT m.*, c.name as category_name 
+            FROM medicines m 
+            LEFT JOIN categories c ON m.category_id = c.id 
+            WHERE m.organization_id = $1 AND m.expiry_date < NOW()
+            ORDER BY m.expiry_date ASC
+        `;
+        const { rows } = await directDb.query(queryStr, [orgId]);
+        
+        const expiredStock = rows.map(m => {
+            const { category_name, ...rest } = m;
+            return {
+                ...rest,
+                categories: { name: category_name }
+            };
+        });
+
+        res.json(expiredStock);
+    } catch (err) {
+        console.error('Error fetching expired stock:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
 // Add new medicine
 exports.addMedicine = async (req, res) => {
     try {

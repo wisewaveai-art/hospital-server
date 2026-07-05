@@ -22,6 +22,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 router.get('/', patientController.getAllPatients);
+router.get('/search', patientController.searchPatients);
 router.post('/profile', patientController.createPatientProfile);
 router.get('/:id/details', patientController.getPatientDetails);
 router.put('/:id', patientController.updatePatient);

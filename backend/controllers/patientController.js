@@ -412,6 +412,32 @@ exports.quickAddPatient = async (req, res) => {
     }
 };
 
+exports.searchPatients = async (req, res) => {
+    try {
+        const orgId = req.organizationId;
+        const { query } = req.query; // phone number or name
+        
+        if (!query || query.trim().length < 3) {
+            return res.json([]);
+        }
+
+        const searchTerm = `%${query.trim()}%`;
+        const { rows } = await directDb.query(`
+            SELECT p.id as patient_id, u.full_name, u.phone, u.email
+            FROM patients p
+            JOIN users u ON p.user_id = u.id
+            WHERE p.organization_id = $1 
+            AND (u.phone LIKE $2 OR u.full_name LIKE $2)
+            LIMIT 10
+        `, [orgId, searchTerm]);
+
+        res.json(rows);
+    } catch (err) {
+        console.error('Search patients error:', err);
+        res.status(500).json({ error: 'Failed to search patients' });
+    }
+};
+
 exports.uploadReport = async (req, res) => {
     try {
         const { id } = req.params; // patient_id

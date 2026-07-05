@@ -191,3 +191,73 @@ exports.addPayment = async (req, res) => {
         res.status(500).json({ error: 'Server error processing payment' });
     }
 };
+
+exports.pharmacyCheckout = async (req, res) => {
+    try {
+        const orgId = req.organizationId;
+        const { phone, full_name, cart, subtotal, discount, tax_percentage, total } = req.body;
+        
+        let patient_id = null;
+
+        // 1. Resolve Patient
+        if (phone) {
+            // Check if patient exists
+            const userCheck = await directDb.query(
+                'SELECT u.id as user_id, p.id as patient_id FROM users u JOIN patients p ON u.id = p.user_id WHERE u.phone = $1 AND u.organization_id = $2 LIMIT 1',
+                [phone, orgId]
+            );
+            if (userCheck.rows.length > 0) {
+                patient_id = userCheck.rows[0].patient_id;
+            } else {
+                // Create user & patient
+                const fakeEmail = `walkin_${Date.now()}@temp.com`;
+                await directDb.query(
+                    'INSERT INTO users (organization_id, full_name, email, phone, role, password_hash) VALUES ($1, $2, $3, $4, $5, $6)',
+                    [orgId, full_name || 'Walk-in Patient', fakeEmail, phone, 'patient', 'no-password-walkin']
+                );
+                const userRes = await directDb.query('SELECT id FROM users WHERE phone = $1 AND organization_id = $2', [phone, orgId]);
+                const newUserId = userRes.rows[0].id;
+
+                const patRes = await directDb.query(
+                    'INSERT INTO patients (user_id, organization_id, patient_type, created_at) VALUES ($1, $2, $3, NOW()) RETURNING id',
+                    [newUserId, orgId, 'Walk-in']
+                );
+                patient_id = patRes.rows[0].id;
+            }
+        } else {
+            return res.status(400).json({ error: 'Phone number is required for billing' });
+        }
+
+        // 2. Validate Stock and Deduct
+        for (const item of cart) {
+            const medRes = await directDb.query('SELECT stock_level FROM medicines WHERE id = $1 AND organization_id = $2', [item.id, orgId]);
+            if (medRes.rows.length === 0 || medRes.rows[0].stock_level < item.quantity) {
+                return res.status(400).json({ error: `Insufficient stock for ${item.name}` });
+            }
+            await directDb.query('UPDATE medicines SET stock_level = stock_level - $1 WHERE id = $2', [item.quantity, item.id]);
+        }
+
+        // 3. Create Invoice
+        const invoiceNum = 'PHARM-' + Math.floor(Math.random() * 1000000);
+        const { rows } = await directDb.query(
+            `INSERT INTO invoices (organization_id, patient_id, amount, subtotal, discount, tax_percentage, notes, status, created_at, invoice_number) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9) RETURNING *`,
+            [orgId, patient_id, total, subtotal, discount || 0, tax_percentage || 0, 'Pharmacy POS Purchase', 'Paid', invoiceNum]
+        );
+        const newInvoice = rows[0];
+
+        // 4. Create Invoice Items
+        for (const item of cart) {
+            await directDb.query(
+                `INSERT INTO invoice_items (organization_id, invoice_id, description, quantity, unit_price, total_price)
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [orgId, newInvoice.id, item.name, item.quantity, item.price, item.quantity * item.price]
+            );
+        }
+
+        res.status(201).json(newInvoice);
+    } catch (err) {
+        console.error('Pharmacy Checkout Error:', err);
+        res.status(500).json({ error: 'Server error processing checkout' });
+    }
+};

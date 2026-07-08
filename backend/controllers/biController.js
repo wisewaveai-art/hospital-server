@@ -22,14 +22,14 @@ exports.getGeneralAnalytics = async (req, res) => {
 
         // 2. Patient demographics (if available, else by patient_type)
         const patientDistribution = await safeQuery(
-            'SELECT patient_type, COUNT(*) as count FROM visits WHERE organization_id = $1 GROUP BY patient_type',
+            'SELECT patient_type, COUNT(*) as count FROM patients WHERE organization_id = $1 GROUP BY patient_type',
             [orgId]
         );
 
         // 3. Monthly patient visits trend (last 6 months)
         const visitsTrend = await safeQuery(`
-            SELECT DATE_FORMAT(visit_date, '%Y-%m') as month, COUNT(*) as count 
-            FROM visits 
+            SELECT DATE_FORMAT(appointment_date, '%Y-%m') as month, COUNT(*) as count 
+            FROM appointments 
             WHERE organization_id = $1 
             GROUP BY month 
             ORDER BY month DESC 

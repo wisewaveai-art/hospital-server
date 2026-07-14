@@ -54,6 +54,7 @@ const migrationController = require('./controllers/migrationController');
 app.post('/api/migrate', migrationController.runMigration);
 
 app.use('/api/auth', authRoutes);
+app.use('/api/vibevoice', require('./routes/vibevoice')); // Open webhook
 
 app.use(authMiddleware);
 app.get('/', (req, res) => {

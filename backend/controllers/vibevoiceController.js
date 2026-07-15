@@ -13,11 +13,20 @@ exports.bookAppointment = async (req, res) => {
     try {
         await ensureSourceColumn();
         
-        // VibeVoice payload
-        const { action, patient_phone, requested_time, department, patient_name } = req.body;
+        // Handle both Custom Tool payload and Webhook payload
+        const { 
+            action, patient_phone, requested_time, patient_name, // Custom Tool format
+            call_id, phone, first_name, appointment_date, department, recording_url, transcript_url // Webhook format
+        } = req.body;
         
-        if (action !== 'book_appointment') {
-            return res.status(400).json({ error: 'Invalid action' });
+        const act = action || 'book_appointment';
+        const pPhone = phone || patient_phone;
+        const pName = first_name || patient_name;
+        const rTime = appointment_date || requested_time;
+        const dept = department || req.body.department;
+        
+        if (act !== 'book_appointment' || !pPhone || !rTime) {
+            return res.status(400).json({ error: 'Missing required fields (phone or requested_time)' });
         }
 
         // For webhooks, we might not have organizationId from token. 
@@ -26,14 +35,14 @@ exports.bookAppointment = async (req, res) => {
 
         // 1. Find or create patient by phone
         let patient_user_id = null;
-        let patientQuery = await directDb.query('SELECT id FROM users WHERE phone = $1 AND role = $2', [patient_phone, 'patient']);
+        let patientQuery = await directDb.query('SELECT id FROM users WHERE phone = $1 AND role = $2', [pPhone, 'patient']);
         if (patientQuery.rowCount > 0) {
             patient_user_id = patientQuery.rows[0].id;
         } else {
             // Create quick patient
             const insertRes = await directDb.query(
                 'INSERT INTO users (organization_id, full_name, phone, role, password_hash) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-                [orgId, patient_name || 'VibeVoice Caller', patient_phone, 'patient', 'no-password-vibevoice']
+                [orgId, pName || 'VibeVoice Caller', pPhone, 'patient', 'no-password-vibevoice']
             );
             patient_user_id = insertRes.rows[0].id;
             
@@ -46,12 +55,12 @@ exports.bookAppointment = async (req, res) => {
 
         // 2. Find a doctor in that department (or default first doctor)
         let doctor_id = null;
-        if (department) {
+        if (dept) {
             let docQuery = await directDb.query(`
                 SELECT d.id FROM doctors d 
                 JOIN users u ON d.user_id = u.id 
                 WHERE d.department ILIKE $1 LIMIT 1
-            `, [`%${department}%`]);
+            `, [`%${dept}%`]);
             if (docQuery.rowCount > 0) doctor_id = docQuery.rows[0].id;
         }
         
@@ -63,7 +72,7 @@ exports.bookAppointment = async (req, res) => {
         // 3. Book it
         const insertApt = await directDb.query(
             'INSERT INTO appointments (organization_id, patient_user_id, doctor_id, appointment_date, reason, status, source) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-            [orgId, patient_user_id, doctor_id, requested_time, 'AI Receptionist Booking', 'scheduled', 'vibevoice']
+            [orgId, patient_user_id, doctor_id, rTime, 'AI Receptionist Booking', 'scheduled', 'vibevoice']
         );
 
         res.status(200).json({ success: true, appointment: insertApt.rows[0] });

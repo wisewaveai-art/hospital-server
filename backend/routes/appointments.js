@@ -8,5 +8,7 @@ router.get('/doctor/:userId', appointmentController.getDoctorAppointments);
 router.get('/all', appointmentController.getAllAppointments); // Admin/Doctor usage
 router.get('/slots', appointmentController.getAvailableSlots);
 router.put('/:id/status', appointmentController.updateStatus);
+router.put('/:id/cancel', appointmentController.cancelAppointment);
+router.post('/cancel-all', appointmentController.cancelAllAppointments);
 
 module.exports = router;

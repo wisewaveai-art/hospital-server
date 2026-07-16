@@ -16,22 +16,30 @@ exports.bookAppointment = async (req, res) => {
         // Handle both Custom Tool payload and Webhook payload
         const { 
             action, patient_phone, requested_time, patient_name, // Custom Tool format
-            call_id, phone, first_name, appointment_date, department, recording_url, transcript_url // Webhook format
+            call_id, phone, first_name, appointment_date, appointment_time, department, recording_url, transcript_url, reason // Webhook format
         } = req.body;
         
         const act = action || 'book_appointment';
         const pPhone = phone || patient_phone;
         const pName = first_name || patient_name;
-        const rTime = appointment_date || requested_time;
         const dept = department || req.body.department;
+        
+        // Combine date and time if they are passed separately
+        let rTime = appointment_date || requested_time;
+        if (rTime && appointment_time) {
+            // Check if rTime already contains time (e.g. ISO string)
+            if (!rTime.includes('T') && !rTime.includes(' ')) {
+                rTime = `${rTime}T${appointment_time}:00`;
+            }
+        }
         
         if (act !== 'book_appointment' || !pPhone || !rTime) {
             return res.status(400).json({ error: 'Missing required fields (phone or requested_time)' });
         }
 
         // For webhooks, we might not have organizationId from token. 
-        // We will assume a default org for now, or if passed via header.
-        const orgId = req.headers['x-organization-id'] || '0001-0000-00001';
+        // We will assume a default org for now, or if passed via header/query/body.
+        const orgId = req.headers['x-organization-id'] || req.query.orgId || req.body.orgId || '0001-0000-00001';
 
         // 1. Find or create patient by phone
         let patient_user_id = null;
@@ -54,25 +62,27 @@ exports.bookAppointment = async (req, res) => {
         }
 
         // 2. Find a doctor in that department (or default first doctor)
-        let doctor_id = null;
-        if (dept) {
+        let doctor_id_resolved = req.body.doctor_id || null;
+        if (!doctor_id_resolved && dept) {
             let docQuery = await directDb.query(`
                 SELECT d.id FROM doctors d 
                 JOIN users u ON d.user_id = u.id 
                 WHERE d.department ILIKE $1 LIMIT 1
             `, [`%${dept}%`]);
-            if (docQuery.rowCount > 0) doctor_id = docQuery.rows[0].id;
+            if (docQuery.rowCount > 0) doctor_id_resolved = docQuery.rows[0].id;
         }
         
-        if (!doctor_id) {
+        if (!doctor_id_resolved) {
             let backupDoc = await directDb.query('SELECT id FROM doctors LIMIT 1');
-            if (backupDoc.rowCount > 0) doctor_id = backupDoc.rows[0].id;
+            if (backupDoc.rowCount > 0) doctor_id_resolved = backupDoc.rows[0].id;
         }
+
+        const bookingReason = reason || 'AI Receptionist Booking';
 
         // 3. Book it
         const insertApt = await directDb.query(
             'INSERT INTO appointments (organization_id, patient_user_id, doctor_id, appointment_date, reason, status, source) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-            [orgId, patient_user_id, doctor_id, rTime, 'AI Receptionist Booking', 'scheduled', 'vibevoice']
+            [orgId, patient_user_id, doctor_id_resolved, rTime, bookingReason, 'scheduled', 'vibevoice']
         );
 
         res.status(200).json({ success: true, appointment: insertApt.rows[0] });

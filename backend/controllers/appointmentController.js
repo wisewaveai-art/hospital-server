@@ -206,9 +206,13 @@ exports.getDoctorAppointments = async (req, res) => {
 
 exports.getAvailableSlots = async (req, res) => {
     try {
-        const { date, orgId = '0001-0000-00001' } = req.query; // default org for open API
-        if (!date) return res.status(400).json({ error: 'Date is required (YYYY-MM-DD)' });
-
+        let { date, orgId = '0001-0000-00001' } = req.query; // default org for open API
+        
+        // Handle missing or unpopulated template variables
+        if (!date || date === '{{date}}') {
+            const now = new Date();
+            date = now.toISOString().split('T')[0]; // Default to today: YYYY-MM-DD
+        }
         // 1. Fetch Config
         const confRes = await directDb.query("SELECT value FROM settings WHERE organization_id = $1 AND key_name = 'appointment_config'", [orgId]);
         let config = {
@@ -228,7 +232,20 @@ exports.getAvailableSlots = async (req, res) => {
         }
 
         // Check if date is within allowed future days
-        const targetDate = new Date(date);
+        let targetDate = new Date(date);
+        
+        // If JS parsed it as year 2001 (default for missing year like "18 July"), set to current year
+        if (targetDate.getFullYear() === 2001) {
+            targetDate.setFullYear(new Date().getFullYear());
+            // If the date is now in the past (e.g. today is Aug, they said "Feb 15"), it might mean next year
+            if (targetDate < new Date() && targetDate.getMonth() < new Date().getMonth()) {
+                targetDate.setFullYear(new Date().getFullYear() + 1);
+            }
+        }
+        
+        // Re-format the 'date' string to YYYY-MM-DD so our DB queries match correctly!
+        date = targetDate.toISOString().split('T')[0];
+
         targetDate.setHours(0,0,0,0);
         const today = new Date();
         today.setHours(0,0,0,0);

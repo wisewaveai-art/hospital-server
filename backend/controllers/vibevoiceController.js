@@ -41,51 +41,56 @@ exports.bookAppointment = async (req, res) => {
         // We will assume a default org for now, or if passed via header/query/body.
         const orgId = req.headers['x-organization-id'] || req.query.orgId || req.body.orgId || '0001-0000-00001';
 
-        // 1. Find or create patient by phone
-        let patient_user_id = null;
-        let patientQuery = await directDb.query('SELECT id FROM users WHERE phone = $1 AND role = $2', [pPhone, 'patient']);
-        if (patientQuery.rowCount > 0) {
-            patient_user_id = patientQuery.rows[0].id;
-        } else {
-            // Create quick patient
-            const insertRes = await directDb.query(
-                'INSERT INTO users (organization_id, full_name, phone, email, role, password_hash) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-                [orgId, pName || 'VibeVoice Caller', pPhone, `${pPhone}@vibevoice.local`, 'patient', 'no-password-vibevoice']
-            );
-            patient_user_id = insertRes.rows[0].id;
+        const pool = require('../db');
+        const tenantPool = await pool.getTenantDb(orgId);
+
+        return pool.dbStorage.run(tenantPool, async () => {
+            // 1. Find or create patient by phone
+            let patient_user_id = null;
+            let patientQuery = await directDb.query('SELECT id FROM users WHERE phone = $1 AND role = $2', [pPhone, 'patient']);
+            if (patientQuery.rowCount > 0) {
+                patient_user_id = patientQuery.rows[0].id;
+            } else {
+                // Create quick patient
+                const insertRes = await directDb.query(
+                    'INSERT INTO users (organization_id, full_name, phone, email, role, password_hash) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+                    [orgId, pName || 'VibeVoice Caller', pPhone, `${pPhone}@vibevoice.local`, 'patient', 'no-password-vibevoice']
+                );
+                patient_user_id = insertRes.rows[0].id;
+                
+                // Create profile
+                await directDb.query(
+                    'INSERT INTO patients (organization_id, user_id, patient_type) VALUES ($1, $2, $3)',
+                    [orgId, patient_user_id, 'Outpatient']
+                );
+            }
+
+            // 2. Find a doctor in that department (or default first doctor)
+            let doctor_id_resolved = req.body.doctor_id || null;
+            if (!doctor_id_resolved && dept) {
+                let docQuery = await directDb.query(`
+                    SELECT d.id FROM doctors d 
+                    JOIN users u ON d.user_id = u.id 
+                    WHERE d.department LIKE $1 LIMIT 1
+                `, [`%${dept}%`]);
+                if (docQuery.rowCount > 0) doctor_id_resolved = docQuery.rows[0].id;
+            }
             
-            // Create profile
-            await directDb.query(
-                'INSERT INTO patients (organization_id, user_id, patient_type) VALUES ($1, $2, $3)',
-                [orgId, patient_user_id, 'Outpatient']
+            if (!doctor_id_resolved) {
+                let backupDoc = await directDb.query('SELECT id FROM doctors LIMIT 1');
+                if (backupDoc.rowCount > 0) doctor_id_resolved = backupDoc.rows[0].id;
+            }
+
+            const bookingReason = reason || 'AI Receptionist Booking';
+
+            // 3. Book it
+            const insertApt = await directDb.query(
+                'INSERT INTO appointments (organization_id, patient_user_id, doctor_id, appointment_date, reason, status, source) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+                [orgId, patient_user_id, doctor_id_resolved, rTime, bookingReason, 'scheduled', 'vibevoice']
             );
-        }
 
-        // 2. Find a doctor in that department (or default first doctor)
-        let doctor_id_resolved = req.body.doctor_id || null;
-        if (!doctor_id_resolved && dept) {
-            let docQuery = await directDb.query(`
-                SELECT d.id FROM doctors d 
-                JOIN users u ON d.user_id = u.id 
-                WHERE d.department LIKE $1 LIMIT 1
-            `, [`%${dept}%`]);
-            if (docQuery.rowCount > 0) doctor_id_resolved = docQuery.rows[0].id;
-        }
-        
-        if (!doctor_id_resolved) {
-            let backupDoc = await directDb.query('SELECT id FROM doctors LIMIT 1');
-            if (backupDoc.rowCount > 0) doctor_id_resolved = backupDoc.rows[0].id;
-        }
-
-        const bookingReason = reason || 'AI Receptionist Booking';
-
-        // 3. Book it
-        const insertApt = await directDb.query(
-            'INSERT INTO appointments (organization_id, patient_user_id, doctor_id, appointment_date, reason, status, source) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-            [orgId, patient_user_id, doctor_id_resolved, rTime, bookingReason, 'scheduled', 'vibevoice']
-        );
-
-        res.status(200).json({ success: true, appointment: insertApt.rows[0] });
+            res.status(200).json({ success: true, appointment: insertApt.rows[0] });
+        });
 
     } catch (err) {
         console.error('VibeVoice Book Error:', err);

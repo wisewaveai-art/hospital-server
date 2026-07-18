@@ -45,6 +45,15 @@ exports.bookAppointment = async (req, res) => {
         const tenantPool = await pool.getTenantDb(orgId);
 
         return pool.dbStorage.run(tenantPool, async () => {
+            
+            // Ensure schema supports source in this specific tenant DB
+            try {
+                // Ignore error if column already exists
+                await directDb.query(`ALTER TABLE appointments ADD COLUMN source VARCHAR(50) DEFAULT 'manual'`);
+            } catch(e) {
+                // Column likely already exists
+            }
+
             // 1. Find or create patient by phone
             let patient_user_id = null;
             let patientQuery = await directDb.query('SELECT id FROM users WHERE phone = $1 AND role = $2', [pPhone, 'patient']);

@@ -49,8 +49,8 @@ exports.bookAppointment = async (req, res) => {
         } else {
             // Create quick patient
             const insertRes = await directDb.query(
-                'INSERT INTO users (organization_id, full_name, phone, role, password_hash) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-                [orgId, pName || 'VibeVoice Caller', pPhone, 'patient', 'no-password-vibevoice']
+                'INSERT INTO users (organization_id, full_name, phone, email, role, password_hash) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+                [orgId, pName || 'VibeVoice Caller', pPhone, `${pPhone}@vibevoice.local`, 'patient', 'no-password-vibevoice']
             );
             patient_user_id = insertRes.rows[0].id;
             

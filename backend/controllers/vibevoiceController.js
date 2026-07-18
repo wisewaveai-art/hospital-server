@@ -67,7 +67,7 @@ exports.bookAppointment = async (req, res) => {
             let docQuery = await directDb.query(`
                 SELECT d.id FROM doctors d 
                 JOIN users u ON d.user_id = u.id 
-                WHERE d.department ILIKE $1 LIMIT 1
+                WHERE d.department LIKE $1 LIMIT 1
             `, [`%${dept}%`]);
             if (docQuery.rowCount > 0) doctor_id_resolved = docQuery.rows[0].id;
         }

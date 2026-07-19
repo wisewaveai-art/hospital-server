@@ -517,7 +517,7 @@ exports.getPatientVitals = async (req, res) => {
 exports.addPatientVitals = async (req, res) => {
     try {
         const { id } = req.params; // patient_id or user_id
-        const { blood_pressure, heart_rate, temperature, oxygen_saturation, recorded_by } = req.body;
+        const { blood_pressure, heart_rate, temperature, oxygen_saturation, respiratory_rate, weight, height, notes, recorded_by } = req.body;
         const orgId = req.organizationId;
         
         // Resolve patient profile ID
@@ -528,9 +528,9 @@ exports.addPatientVitals = async (req, res) => {
         }
 
         const { rows } = await directDb.query(
-            `INSERT INTO patient_vitals (organization_id, patient_id, recorded_by, blood_pressure, heart_rate, temperature, oxygen_saturation) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-            [orgId, patientProfileId, recorded_by || req.user?.id || null, blood_pressure, heart_rate, temperature, oxygen_saturation]
+            `INSERT INTO patient_vitals (organization_id, patient_id, recorded_by, blood_pressure, heart_rate, temperature, oxygen_saturation, respiratory_rate, weight, height, notes) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+            [orgId, patientProfileId, recorded_by || req.user?.id || null, blood_pressure, heart_rate, temperature, oxygen_saturation, respiratory_rate, weight, height, notes]
         );
         
         res.json(rows[0]);

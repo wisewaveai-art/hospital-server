@@ -38,4 +38,8 @@ router.post('/quick-add', patientController.quickAddPatient);
 router.post('/:id/reports', upload.single('report_file'), patientController.uploadReport);
 router.get('/:id/reports', patientController.getReports);
 
+// Vitals
+router.get('/:id/vitals', patientController.getPatientVitals);
+router.post('/:id/vitals', patientController.addPatientVitals);
+
 module.exports = router;

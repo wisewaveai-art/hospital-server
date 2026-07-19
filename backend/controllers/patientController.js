@@ -15,7 +15,7 @@ exports.getAllPatients = async (req, res) => {
         const orgId = req.organizationId;
         
         const { rows: patients } = await directDb.query(
-            `SELECT u.id, u.email, u.full_name, u.phone, u.address, u.created_at,
+            `SELECT u.id, u.email, u.full_name, u.phone, u.address, u.created_at, u.profile_pic,
                     p.id as profile_id, p.blood_group, p.dob, p.medical_history, p.emergency_contact, p.patient_type,
                     p.assigned_doctor_id, p.allergies, p.chronic_diseases, p.current_medications,
                     p.insurance_provider, p.insurance_number, p.blood_pressure, p.sugar_level, p.injury_condition, p.insurance_coverage,
@@ -168,7 +168,7 @@ exports.updatePatient = async (req, res) => {
      try {
         const { id } = req.params; // this is user id
         const {
-            full_name, email, phone, address, 
+            full_name, email, phone, address, profile_pic,
             blood_group, dob, emergency_contact, medical_history, patient_type, assigned_doctor_id,
             allergies, chronic_diseases, current_medications, insurance_provider, insurance_number,
             blood_pressure, sugar_level, injury_condition, insurance_coverage,
@@ -178,8 +178,8 @@ exports.updatePatient = async (req, res) => {
         const orgId = req.organizationId;
         // 1. Update users table
         await directDb.query(
-            'UPDATE users SET full_name=$1, email=$2, phone=$3, address=$4 WHERE id=$5 AND organization_id=$6',
-            [full_name, email, phone, address, id, orgId]
+            'UPDATE users SET full_name=$1, email=$2, phone=$3, address=$4, profile_pic=$5 WHERE id=$6 AND organization_id=$7',
+            [full_name, email, phone, address, profile_pic, id, orgId]
         );
 
         // 2. update or insert into patients table
@@ -483,5 +483,59 @@ exports.getReports = async (req, res) => {
     } catch (err) {
         console.error('Get Reports Error:', err);
         res.status(500).json({ error: 'Failed to fetch reports' });
+    }
+};
+
+exports.getPatientVitals = async (req, res) => {
+    try {
+        const { id } = req.params; // this is the patient_id (or user_id depending on how it's passed, but usually it's user_id in this app)
+        const orgId = req.organizationId;
+        
+        // Let's resolve the actual patient profile ID from user_id just in case
+        let patientProfileId = id;
+        const profileRes = await directDb.query('SELECT id FROM patients WHERE user_id=$1 OR id=$2', [id, id]);
+        if (profileRes.rows.length > 0) {
+            patientProfileId = profileRes.rows[0].id;
+        }
+
+        const { rows } = await directDb.query(
+            `SELECT v.*, u.full_name as recorded_by_name, u.role as recorded_by_role 
+             FROM patient_vitals v 
+             LEFT JOIN users u ON v.recorded_by = u.id 
+             WHERE v.patient_id = $1 AND v.organization_id = $2
+             ORDER BY v.recorded_at DESC`,
+            [patientProfileId, orgId]
+        );
+        
+        res.json(rows);
+    } catch (err) {
+        console.error('Get Vitals Error:', err);
+        res.status(500).json({ error: 'Failed to fetch vitals' });
+    }
+};
+
+exports.addPatientVitals = async (req, res) => {
+    try {
+        const { id } = req.params; // patient_id or user_id
+        const { blood_pressure, heart_rate, temperature, oxygen_saturation, recorded_by } = req.body;
+        const orgId = req.organizationId;
+        
+        // Resolve patient profile ID
+        let patientProfileId = id;
+        const profileRes = await directDb.query('SELECT id FROM patients WHERE user_id=$1 OR id=$2', [id, id]);
+        if (profileRes.rows.length > 0) {
+            patientProfileId = profileRes.rows[0].id;
+        }
+
+        const { rows } = await directDb.query(
+            `INSERT INTO patient_vitals (organization_id, patient_id, recorded_by, blood_pressure, heart_rate, temperature, oxygen_saturation) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+            [orgId, patientProfileId, recorded_by || req.user?.id || null, blood_pressure, heart_rate, temperature, oxygen_saturation]
+        );
+        
+        res.json(rows[0]);
+    } catch (err) {
+        console.error('Add Vitals Error:', err);
+        res.status(500).json({ error: 'Failed to add vitals' });
     }
 };

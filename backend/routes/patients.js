@@ -42,4 +42,9 @@ router.get('/:id/reports', patientController.getReports);
 router.get('/:id/vitals', patientController.getPatientVitals);
 router.post('/:id/vitals', patientController.addPatientVitals);
 
+// Assignees
+router.get('/:id/assignees', patientController.getAssignees);
+router.post('/:id/assignees', patientController.addAssignee);
+router.delete('/:id/assignees/:userId', patientController.removeAssignee);
+
 module.exports = router;

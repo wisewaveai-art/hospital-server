@@ -65,6 +65,30 @@ exports.getAllPatients = async (req, res) => {
             });
         }
 
+        // Fetch assignees for these patients
+        let assigneesMap = {};
+        if (patientIds.length > 0) {
+            const placeholders = patientIds.map((_, i) => `$${i+1}`).join(',');
+            const assigneesQuery = `
+                SELECT a.patient_id, a.id as assignment_id, u.id as user_id, u.full_name, u.role, a.created_at as assigned_at, a.relieved_at
+                FROM inpatient_assignments a
+                JOIN users u ON a.user_id = u.id
+                WHERE a.patient_id IN (${placeholders})
+                ORDER BY a.created_at DESC
+            `;
+            const assigneesRows = await safeQuery(assigneesQuery, patientIds);
+            for (const a of assigneesRows) {
+                if (!assigneesMap[a.patient_id]) assigneesMap[a.patient_id] = [];
+                assigneesMap[a.patient_id].push({
+                    id: a.user_id,
+                    full_name: a.full_name,
+                    role: a.role,
+                    assigned_at: a.assigned_at,
+                    relieved_at: a.relieved_at
+                });
+            }
+        }
+
         const enrichedData = patients.map(p => {
             const recent_visit = p.profile_id ? recentVisitsMap[p.profile_id] : null;
 
@@ -90,7 +114,8 @@ exports.getAllPatients = async (req, res) => {
                     full_name: p.doctor_name
                 } : null,
                 relations: relationsByPatient[p.profile_id] || [],
-                recent_visit: recent_visit
+                recent_visit: recent_visit,
+                assignees: assigneesMap[p.profile_id] || []
             }] : [];
 
             return {
@@ -537,5 +562,86 @@ exports.addPatientVitals = async (req, res) => {
     } catch (err) {
         console.error('Add Vitals Error:', err);
         res.status(500).json({ error: 'Failed to add vitals' });
+    }
+};
+
+exports.getAssignees = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const orgId = req.organizationId;
+        
+        let patientProfileId = id;
+        const profileRes = await directDb.query('SELECT id FROM patients WHERE user_id=$1 OR id=$2', [id, id]);
+        if (profileRes.rows.length > 0) {
+            patientProfileId = profileRes.rows[0].id;
+        }
+
+        const { rows } = await directDb.query(
+            `SELECT a.id as assignment_id, u.id, u.full_name, u.email, u.role, u.department, u.phone, a.created_at as assigned_at, a.relieved_at
+             FROM inpatient_assignments a
+             JOIN users u ON a.user_id = u.id
+             WHERE a.patient_id = $1 AND a.organization_id = $2
+             ORDER BY a.created_at ASC`,
+            [patientProfileId, orgId]
+        );
+        res.json(rows);
+    } catch (err) {
+        console.error('Error fetching assignees:', err);
+        res.status(500).json({ error: 'Failed to fetch assignees' });
+    }
+};
+
+exports.addAssignee = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { user_id } = req.body;
+        const orgId = req.organizationId;
+        const assigned_by = req.user?.id || null;
+
+        let patientProfileId = id;
+        const profileRes = await directDb.query('SELECT id FROM patients WHERE user_id=$1 OR id=$2', [id, id]);
+        if (profileRes.rows.length > 0) {
+            patientProfileId = profileRes.rows[0].id;
+        }
+
+        const userRes = await directDb.query('SELECT role FROM users WHERE id=$1 AND organization_id=$2', [user_id, orgId]);
+        if (userRes.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+        const role = userRes.rows[0].role;
+
+        // Ensure not already actively assigned
+        const checkRes = await directDb.query('SELECT id FROM inpatient_assignments WHERE patient_id=$1 AND user_id=$2 AND relieved_at IS NULL', [patientProfileId, user_id]);
+        if (checkRes.rows.length > 0) return res.status(400).json({ error: 'Already actively assigned' });
+
+        const { rows } = await directDb.query(
+            `INSERT INTO inpatient_assignments (organization_id, patient_id, user_id, role, assigned_by) 
+             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+            [orgId, patientProfileId, user_id, role, assigned_by]
+        );
+        res.json(rows[0]);
+    } catch (err) {
+        console.error('Error adding assignee:', err);
+        res.status(500).json({ error: 'Failed to add assignee' });
+    }
+};
+
+exports.removeAssignee = async (req, res) => {
+    try {
+        const { id, userId } = req.params;
+        const orgId = req.organizationId;
+
+        let patientProfileId = id;
+        const profileRes = await directDb.query('SELECT id FROM patients WHERE user_id=$1 OR id=$2', [id, id]);
+        if (profileRes.rows.length > 0) {
+            patientProfileId = profileRes.rows[0].id;
+        }
+
+        await directDb.query(
+            'UPDATE inpatient_assignments SET relieved_at = CURRENT_TIMESTAMP WHERE patient_id=$1 AND user_id=$2 AND organization_id=$3 AND relieved_at IS NULL',
+            [patientProfileId, userId, orgId]
+        );
+        res.json({ message: 'Assignee removed successfully' });
+    } catch (err) {
+        console.error('Error removing assignee:', err);
+        res.status(500).json({ error: 'Failed to remove assignee' });
     }
 };

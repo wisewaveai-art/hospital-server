@@ -248,3 +248,21 @@ exports.deleteUser = async (req, res) => {
     }
 };
 
+exports.getAssignableUsers = async (req, res) => {
+    try {
+        const orgId = req.organizationId;
+        const { rows } = await directDb.query(
+            `SELECT id, full_name, email, role, department, phone 
+             FROM users 
+             WHERE organization_id = $1 
+             AND role IN ('doctor', 'nurse', 'staff') 
+             ORDER BY full_name ASC`,
+            [orgId]
+        );
+        res.json(rows);
+    } catch (err) {
+        console.error('Error fetching assignable users:', err);
+        res.status(500).json({ error: 'Failed to fetch assignable users' });
+    }
+};
+

@@ -501,3 +501,14 @@ CREATE TABLE IF NOT EXISTS expenses (
     FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
 );
 
+-- Inpatient Assignments
+CREATE TABLE IF NOT EXISTS inpatient_assignments (
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    organization_id CHAR(36),
+    patient_id CHAR(36),
+    user_id CHAR(36),
+    role VARCHAR(50),
+    assigned_by CHAR(36),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    relieved_at DATETIME NULL
+);

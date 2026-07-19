@@ -4,6 +4,7 @@ const userController = require('../controllers/userController');
 
 // In a real app, you'd add middleware here to check if the requester is an Admin
 router.get('/', userController.getAllUsers);
+router.get('/assignable', userController.getAssignableUsers);
 router.post('/', userController.createUser);
 router.put('/:id/role', userController.updateUserRole);
 router.put('/:id/password', userController.updatePassword);

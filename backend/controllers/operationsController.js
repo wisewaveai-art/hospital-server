@@ -123,7 +123,32 @@ const createOperation = async (req, res) => {
     }
 };
 
+const updateOperationStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+        const orgId = req.organizationId;
+        
+        const updateQuery = `
+            UPDATE operations 
+            SET status = $1 
+            WHERE id = $2 AND organization_id = $3
+        `;
+        const result = await directDb.query(updateQuery, [status, id, orgId]);
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Operation not found' });
+        }
+        
+        res.json({ id, status, message: 'Status updated successfully' });
+    } catch (error) {
+        console.error("Update operation error:", error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
 module.exports = {
     getOperations,
-    createOperation
+    createOperation,
+    updateOperationStatus
 };

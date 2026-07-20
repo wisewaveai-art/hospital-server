@@ -120,6 +120,7 @@ exports.getAllAppointments = async (req, res) => {
             SELECT a.*, 
                    p.full_name as patient_name,
                    d.id as doc_profile_id,
+                   d.user_id as doctor_user_id,
                    u.full_name as doctor_name
             FROM appointments a
             LEFT JOIN users p ON a.patient_user_id = p.id
@@ -132,11 +133,11 @@ exports.getAllAppointments = async (req, res) => {
         const rows = await safeQuery(queryStr, [orgId]);
 
         const formatted = rows.map(r => {
-            const { patient_name, doc_profile_id, doctor_name, ...app } = r;
+            const { patient_name, doc_profile_id, doctor_user_id, doctor_name, ...app } = r;
             return {
                 ...app,
                 users: patient_name ? { full_name: patient_name } : null,
-                doctors: doc_profile_id ? { users: { full_name: doctor_name } } : null
+                doctors: doc_profile_id ? { user_id: doctor_user_id, users: { full_name: doctor_name } } : null
             };
         });
 

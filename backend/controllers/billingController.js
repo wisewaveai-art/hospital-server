@@ -19,6 +19,7 @@ exports.getInvoices = async (req, res) => {
         let queryStr = `
             SELECT i.*, 
                    p.id as patient_id, 
+                   u.id as user_id,
                    u.full_name as patient_name
             FROM invoices i
             LEFT JOIN patients p ON i.patient_id = p.id

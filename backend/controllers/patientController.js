@@ -176,11 +176,22 @@ exports.getPatientDetails = async (req, res) => {
         }
         
         const patientData = rows[0];
+        const profileId = patientData.patient_profile_id || id;
         
         // Fetch previous visits
-        const visitsQuery = `SELECT * FROM patient_visits WHERE patient_id = $1 ORDER BY visit_date DESC LIMIT 5`;
-        const visitsRes = await directDb.query(visitsQuery, [id]);
-        patientData.previous_visits = visitsRes.rows;
+        const visitsQuery = `
+            SELECT pv.*, u.full_name as doctor_name 
+            FROM patient_visits pv
+            LEFT JOIN users u ON pv.doctor_id = u.id
+            WHERE pv.patient_id = $1 
+            ORDER BY pv.visit_date DESC LIMIT 5`;
+        const visitsRes = await directDb.query(visitsQuery, [profileId]);
+        
+        // attach doctor info manually as doctors object for frontend compatibility
+        patientData.previous_visits = visitsRes.rows.map(v => ({
+            ...v,
+            doctors: v.doctor_name ? { users: { full_name: v.doctor_name } } : null
+        }));
 
         res.json(patientData);
     } catch (err) {
@@ -494,6 +505,12 @@ exports.getReports = async (req, res) => {
         const { id } = req.params; // patient_id
         const orgId = req.organizationId;
         
+        let patientProfileId = id;
+        const profileRes = await directDb.query('SELECT id FROM patients WHERE user_id=$1 OR id=$2', [id, id]);
+        if (profileRes.rows.length > 0) {
+            patientProfileId = profileRes.rows[0].id;
+        }
+
         const db = directDb.wrap(req.db);
         const { rows } = await db.query(
             `SELECT r.*, u.full_name as uploaded_by_name 
@@ -501,7 +518,7 @@ exports.getReports = async (req, res) => {
              LEFT JOIN users u ON r.uploaded_by = u.id 
              WHERE r.patient_id = $1 AND r.organization_id = $2
              ORDER BY r.created_at DESC`,
-            [id, orgId]
+            [patientProfileId, orgId]
         );
         
         res.json(rows);

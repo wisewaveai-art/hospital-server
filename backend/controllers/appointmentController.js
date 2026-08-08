@@ -153,13 +153,19 @@ exports.updateStatus = async (req, res) => {
         const { id } = req.params;
         const { status } = req.body;
         
-        // Add a check to ensure the status column exists, if it doesn't we might need an alter table, but let's assume it exists or we can just try to update.
-        // Wait, if status column doesn't exist, this will crash. Let's add the column if it doesn't exist.
         try {
             await directDb.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Scheduled'`);
+            await directDb.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS token_number VARCHAR(20)`);
         } catch(e) {}
         
-        await directDb.query('UPDATE appointments SET status = $1 WHERE id = $2', [status, id]);
+        let token_number = null;
+        if (status === 'Approved') {
+            token_number = 'T-' + Math.floor(1000 + Math.random() * 9000);
+            await directDb.query('UPDATE appointments SET status = $1, token_number = $2 WHERE id = $3', [status, token_number, id]);
+        } else {
+            await directDb.query('UPDATE appointments SET status = $1 WHERE id = $2', [status, id]);
+        }
+
         res.json({ message: 'Status updated' });
     } catch (err) {
         console.error(err);

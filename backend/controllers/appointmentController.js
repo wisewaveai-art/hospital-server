@@ -429,3 +429,61 @@ exports.cancelAllAppointments = async (req, res) => {
         res.status(500).json({ error: 'Server error' });
     }
 };
+
+exports.rescheduleAppointment = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { new_date } = req.body;
+        
+        // Fetch appointment details
+        const aptRes = await directDb.query(`
+            SELECT a.*, u.full_name as patient_name, u.phone as patient_phone, 
+                   d.id as doc_id, du.full_name as doctor_name
+            FROM appointments a
+            JOIN users u ON a.patient_user_id = u.id
+            LEFT JOIN doctors d ON a.doctor_id = d.id
+            LEFT JOIN users du ON d.user_id = du.id
+            WHERE a.id = $1
+        `, [id]);
+
+        if (aptRes.rowCount === 0) return res.status(404).json({ error: 'Appointment not found' });
+        const apt = aptRes.rows[0];
+
+        // Update appointment_date
+        await directDb.query('UPDATE appointments SET appointment_date = $1 WHERE id = $2', [new_date, id]);
+
+        // Trigger Call via VibeVoice
+        if (apt.patient_phone) {
+            const vvKeyRes = await directDb.query("SELECT value FROM settings WHERE organization_id = $1 AND key_name = 'vibevoice_api_key'", [apt.organization_id]);
+            const vvWfRes = await directDb.query("SELECT value FROM settings WHERE organization_id = $1 AND key_name = 'vibevoice_workflow_id'", [apt.organization_id]);
+            
+            if (vvKeyRes.rowCount > 0 && vvWfRes.rowCount > 0 && vvKeyRes.rows[0].value && vvWfRes.rows[0].value) {
+                const apiKey = vvKeyRes.rows[0].value;
+                const wfId = vvWfRes.rows[0].value;
+                
+                fetch(`https://modelvoice.wisecrestsolutions.com/api/v1/public/agent/workflow/${wfId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        to_number: apt.patient_phone,
+                        variables: {
+                            action: 'reschedule',
+                            patient_name: apt.patient_name,
+                            appointment_time: new_date,
+                            doctor_name: apt.doctor_name || 'the doctor',
+                            appointment_id: apt.id
+                        }
+                    })
+                }).catch(e => console.error('VibeVoice trigger failed:', e));
+            }
+        }
+
+        res.json({ message: 'Appointment rescheduled successfully' });
+    } catch (err) {
+        console.error('Error rescheduling appointment:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+};

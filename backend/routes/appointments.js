@@ -9,6 +9,7 @@ router.get('/all', appointmentController.getAllAppointments); // Admin/Doctor us
 router.get('/slots', appointmentController.getAvailableSlots);
 router.put('/:id/status', appointmentController.updateStatus);
 router.put('/:id/cancel', appointmentController.cancelAppointment);
+router.put('/:id/reschedule', appointmentController.rescheduleAppointment);
 router.post('/cancel-all', appointmentController.cancelAllAppointments);
 
 module.exports = router;

@@ -105,6 +105,37 @@ app.use('/api/vitals', require('./routes/vitalsRoutes'));
 const hrRoutes = require('./routes/hr');
 app.use('/api/hr', hrRoutes);
 
+// ── Auto-migrate: ensure is_active column exists on startup ──────────────────
+(async () => {
+    try {
+        const mysql = require('mysql2/promise');
+        const setupConn = await mysql.createConnection({
+            host: process.env.DATABASE_HOST || 'localhost',
+            port: Number(process.env.DATABASE_PORT || '3306'),
+            user: process.env.DATABASE_USER || 'root',
+            password: process.env.DATABASE_PASSWORD || '',
+            database: process.env.DATABASE_NAME || 'wisehospital',
+        });
+        try {
+            await setupConn.query(
+                `ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE`
+            );
+            await setupConn.query(
+                `UPDATE users SET is_active = TRUE WHERE is_active IS NULL`
+            );
+            console.log('[Migration] Added is_active column to users table.');
+        } catch (e) {
+            // Column likely already exists — that's fine
+            if (!e.message.includes('Duplicate column')) {
+                console.warn('[Migration] is_active column note:', e.message);
+            }
+        }
+        await setupConn.end();
+    } catch (err) {
+        console.error('[Migration] Auto-migration failed (non-fatal):', err.message);
+    }
+})();
+
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });

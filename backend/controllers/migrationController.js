@@ -83,6 +83,11 @@ exports.runMigration = async (req, res) => {
             // Patch room_allocations for guest info
             try { await setupConn.query(`ALTER TABLE room_allocations ADD COLUMN guest_name VARCHAR(255)`); } catch(e) {}
             try { await setupConn.query(`ALTER TABLE room_allocations ADD COLUMN guest_contact VARCHAR(50)`); } catch(e) {}
+
+            // Patch users table: add is_active column if missing
+            try { await setupConn.query(`ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE`); } catch(e) {}
+            // Backfill: set any NULL is_active rows to true
+            try { await setupConn.query(`UPDATE users SET is_active = TRUE WHERE is_active IS NULL`); } catch(e) {}
         };
 
         await patchColumns();

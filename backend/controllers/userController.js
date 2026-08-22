@@ -51,7 +51,7 @@ exports.getAllUsers = async (req, res) => {
     try {
         const orgId = req.organizationId;
         let queryStr = `
-            SELECT u.id, u.email, u.full_name, u.role, u.created_at, u.profile_pic, u.organization_id, o.name as org_name, o.slug as org_slug
+            SELECT u.id, u.email, u.full_name, u.role, u.is_active, u.created_at, u.profile_pic, u.organization_id, u.phone, u.department, o.name as org_name, o.slug as org_slug
             FROM users u
             LEFT JOIN organizations o ON u.organization_id = o.id
             WHERE 1=1
@@ -266,3 +266,52 @@ exports.getAssignableUsers = async (req, res) => {
     }
 };
 
+// Toggle active / inactive status for a user
+exports.updateUserStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { is_active } = req.body;
+
+        if (typeof is_active !== 'boolean') {
+            return res.status(400).json({ error: 'is_active must be a boolean' });
+        }
+
+        const orgId = req.organizationId || (req.user && req.user.organization_id);
+
+        // Security check: only allow within the same org, unless superadmin
+        if (req.user && req.user.role !== 'superadmin') {
+            const userCheck = await directDb.query(
+                'SELECT organization_id FROM users WHERE id = $1',
+                [id]
+            );
+            if (userCheck.rows.length === 0) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            if (userCheck.rows[0].organization_id !== orgId) {
+                return res.status(403).json({ error: 'Unauthorized to modify this user' });
+            }
+        }
+
+        const { rowCount } = await directDb.query(
+            'UPDATE users SET is_active = $1 WHERE id = $2',
+            [is_active, id]
+        );
+
+        if (rowCount === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const { rows } = await directDb.query(
+            'SELECT id, email, full_name, role, is_active, created_at FROM users WHERE id = $1',
+            [id]
+        );
+
+        res.json({
+            message: `User ${is_active ? 'activated' : 'deactivated'} successfully`,
+            user: rows[0]
+        });
+    } catch (err) {
+        console.error('Error updating user status:', err);
+        res.status(500).json({ error: 'Server error updating user status' });
+    }
+};

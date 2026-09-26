@@ -12,9 +12,9 @@ exports.getCurrentOrganization = async (req, res) => {
             queryParams = [orgId];
         }
 
-        const { rows } = await directDb.pool.query(
-          queryStr.replace(/\$\d+/g, '?'), 
-          queryParams
+        const { rows } = await directDb.query(
+            `SELECT * FROM organizations WHERE id = $1`,
+            [orgId]
         );
         
         // Convert to the format expected by the frontend (.rows)

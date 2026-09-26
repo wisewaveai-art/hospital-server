@@ -6,7 +6,7 @@ exports.getAllStaff = async (req, res) => {
         const orgId = req.organizationId;
         let queryStr = `
             SELECT u.id, u.full_name, u.role, u.email, u.phone, u.organization_id, o.name as org_name,
-                   s.designation, s.shift_start, s.shift_end, s.joined_date
+                   s.designation, s.shift_start, s.shift_end, s.joined_date, s.base_salary, s.payment_type, s.bank_account_details
             FROM users u
             LEFT JOIN organizations o ON u.organization_id = o.id
             LEFT JOIN staff s ON u.id = s.user_id
@@ -29,14 +29,17 @@ exports.getAllStaff = async (req, res) => {
 
         // Format to match old structure expecting `{ staff: [{ designation, shift_start... }] }`
         const formattedData = rows.map(row => {
-            const { designation, shift_start, shift_end, joined_date, ...userObj } = row;
+            const { designation, shift_start, shift_end, joined_date,base_salary,payment_type,bank_account_details, ...userObj } = row;
             return {
                 ...userObj,
                 staff: [{
                     designation, 
                     shift_start, 
                     shift_end, 
-                    joined_date
+                    joined_date,
+                    base_salary, 
+                    payment_type, 
+                    bank_account_details
                 }]
             };
         });

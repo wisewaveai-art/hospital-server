@@ -15,4 +15,7 @@ router.post('/theme', settingsController.updateTheme);
 router.get('/:key', settingsController.getByKey);
 router.post('/:key', settingsController.updateByKey);
 
+router.put('/appointment_config', settingsController.updateAppointmentConfig);
+router.get('/appointment_config', settingsController.getAppointmentConfig);
+
 module.exports = router;

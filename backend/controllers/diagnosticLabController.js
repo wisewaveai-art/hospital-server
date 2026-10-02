@@ -20,7 +20,7 @@ exports.create = async (req, res) => {
         const { lab_name, contact_person, phone, email, address, status, note } = req.body;
         const { rows } = await directDb.query(
             `INSERT INTO diagnostic_labs (organization_id, lab_name, contact_person, phone, email, address, status, note) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,// RETURNING *`,
             [orgId, lab_name, contact_person, phone, email, address, status, note]
         );
         res.status(201).json(rows[0]);

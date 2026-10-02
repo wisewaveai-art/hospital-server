@@ -29,7 +29,7 @@ exports.getAllDoctors = async (req, res) => {
         // 2. Fetch profiles
         const userIds = users.map(u => u.id);
         const placeholders = userIds.map((_, i) => `$${i + 1}`).join(',');
-        const profileQuery = `SELECT id, user_id, branch_id, specialization, bio, availability, website_url, department, designation, doctor_code, license_number, base_salary, payment_type, bank_account_details, created_at as joined_date FROM doctors WHERE user_id IN (${placeholders})`;
+        const profileQuery = `SELECT id, user_id, branch_id, specialization, bio, availability, website_url, department, designation, base_salary, payment_type, bank_account_details, created_at as joined_date FROM doctors WHERE user_id IN (${placeholders})`;
         
         const { rows: profiles } = await directDb.query(profileQuery, userIds);
 
@@ -66,7 +66,7 @@ exports.getDoctorProfile = async (req, res) => {
         const { id } = req.params; // this is user id
         const query = `
             SELECT u.id, u.full_name, u.email, u.phone, u.address, u.gender, u.organization_id, o.name as org_name,
-                   d.department, d.designation, d.specialization, d.bio, d.availability, d.doctor_code, d.license_number, d.base_salary, d.payment_type, d.bank_account_details, d.created_at as joined_date
+                   d.department, d.designation, d.specialization, d.bio, d.availability, , , d.base_salary, d.payment_type, d.bank_account_details, d.created_at as joined_date
             FROM users u
             LEFT JOIN organizations o ON u.organization_id = o.id
             LEFT JOIN doctors d ON u.id = d.user_id
@@ -85,23 +85,194 @@ exports.getDoctorProfile = async (req, res) => {
 exports.updateDoctor = async (req, res) => {
     try {
         const { id } = req.params;
+
         const {
             full_name, email, phone, address, gender,
-            department, designation, specialization, bio, availability, doctor_code, license_number,
+            department, designation, specialization, bio, availability,
+            base_salary, payment_type, bank_account_details
+        } = req.body;
+
+        const orgId = req.organizationId;
+
+        // 1. Update Users Table
+        await directDb.query(
+            `UPDATE users 
+             SET full_name= ?, 
+                 email= ?, 
+                 phone= ?, 
+                 address= ?, 
+                 gender= ? 
+             WHERE id= ? AND organization_id= ?`,
+            [
+                full_name,
+                email,
+                phone,
+                address,
+                gender,
+                id,
+                orgId
+            ]
+        );
+
+        // 2. Check Doctors Table
+        const { rows: doctorRows } = await directDb.query(
+            `SELECT id 
+             FROM doctors 
+             WHERE user_id= ? AND organization_id= ?`,
+            [id, orgId]
+        );
+
+        // 3. Doctor already exists
+        if (doctorRows.length > 0) {
+
+            // Update Doctors Table
+            const updateResult = await directDb.query(
+                `UPDATE doctors 
+                 SET department= ?, 
+                     designation= ?, 
+                     specialization= ?, 
+                     bio= ?, 
+                     availability= ?, 
+                     base_salary= ?, 
+                     payment_type= ?, 
+                     bank_account_details= ? 
+                 WHERE user_id= ? AND organization_id= ?`,
+                [
+                    department,
+                    designation,
+                    specialization,
+                    bio,
+                    availability,
+                    base_salary || 0,
+                    payment_type || 'monthly',
+                    bank_account_details,
+                    id,
+                    orgId
+                ]
+            );
+
+            console.log("UPDATE RESULT:", updateResult);
+
+            // Check updated doctor
+            const { rows: checkDoctor } = await directDb.query(
+                `SELECT * 
+                 FROM doctors 
+                 WHERE user_id= ? AND organization_id= ?`,
+                [id, orgId]
+            );
+
+            console.log("DOCTOR AFTER UPDATE:", checkDoctor);
+const { rows: dbCheck } = await directDb.query(
+    `SELECT DATABASE() AS db_name`
+);
+
+console.log("BACKEND DATABASE:", dbCheck);
+const { rows: tableCheck } = await directDb.query(
+    `SELECT TABLE_SCHEMA, TABLE_NAME
+     FROM information_schema.tables
+     WHERE TABLE_NAME = 'doctors'`
+);
+
+console.log("BACKEND DOCTORS TABLE:", tableCheck);
+const { rows: allDoctors } = await directDb.query(
+    `SELECT * FROM doctors`
+);
+
+console.log("BACKEND ALL DOCTORS:", allDoctors);
+
+            if (checkDoctor.length === 0) {
+                throw new Error("Doctor update failed - record not found");
+            }
+
+            console.log("Doctor updated");
+
+            return res.json({
+                message: 'Doctor profile updated successfully',
+                doctor: checkDoctor[0]
+            });
+        }
+
+        // 4. Doctor does not exist -> Create
+        const insertResult = await directDb.query(
+            `INSERT INTO doctors (
+                user_id,
+                organization_id,
+                department,
+                designation,
+                specialization,
+                bio,
+                availability,
+                base_salary,
+                payment_type,
+                bank_account_details
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                id,
+                orgId,
+                department,
+                designation,
+                specialization,
+                bio,
+                availability,
+                base_salary || 0,
+                payment_type || 'monthly',
+                bank_account_details
+            ]
+        );
+
+        console.log("INSERT RESULT:", insertResult);
+
+        // 5. Check inserted doctor
+        const { rows: checkDoctor } = await directDb.query(
+            `SELECT * 
+             FROM doctors 
+             WHERE user_id= ? AND organization_id= ?`,
+            [id, orgId]
+        );
+
+        console.log("DOCTOR AFTER INSERT:", checkDoctor);
+
+        if (checkDoctor.length === 0) {
+            throw new Error("Doctor insert failed - record not found after INSERT");
+        }
+
+        console.log("Doctor created");
+
+        return res.json({
+            message: 'Doctor profile created successfully',
+            doctor: checkDoctor[0]
+        });
+
+    } catch (err) {
+        console.error('Error updating doctor:', err);
+
+        res.status(500).json({
+            error: 'Server error updating doctor profile',
+            details: err.message
+        });
+    }
+};
+exports.updateDoctor1 = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            full_name, email, phone, address, gender,
+            department, designation, specialization, bio, availability,
             base_salary, payment_type, bank_account_details
         } = req.body;
 
         const orgId = req.organizationId;
         // 1. Update Users Table
         await directDb.query(
-            'UPDATE users SET full_name=$1, email=$2, phone=$3, address=$4, gender=$5 WHERE id=$6 AND organization_id=$7',
+            `UPDATE users SET full_name= ?, email= ?, phone= ?, address= ?, gender= ? WHERE id= ? AND organization_id= ?`,
             [full_name, email, phone, address, gender, id, orgId]
         );
 
         // 2. Update Doctors Table
         await directDb.query(
-            'UPDATE doctors SET department=$1, designation=$2, specialization=$3, bio=$4, availability=$5, doctor_code=$6, license_number=$7, base_salary=$8, payment_type=$9, bank_account_details=$10 WHERE user_id=$11 AND organization_id=$12',
-            [department, designation, specialization, bio, availability, doctor_code, license_number, base_salary || 0, payment_type || 'monthly', bank_account_details, id, orgId]
+            `UPDATE doctors SET department= ?, designation= ?, specialization= ?, bio= ?, availability= ?, base_salary= ?, payment_type= ?, bank_account_details= ? WHERE user_id= ? AND organization_id= ?`,
+            [department, designation, specialization, bio, availability, base_salary || 0, payment_type || 'monthly', bank_account_details, id, orgId]
         );
 
         res.json({ message: 'Doctor profile updated successfully' });
@@ -114,20 +285,19 @@ exports.updateDoctor = async (req, res) => {
 // Create Doctor Profile
 exports.createDoctorProfile = async (req, res) => {
     try {
-        const { user_id, specialization, bio, availability, website_url, department, designation, doctor_code, license_number } = req.body;
+        const { user_id, specialization, bio, availability, website_url, department, designation, branch_id } = req.body;
         const orgId = req.organizationId;
-
-        const existing = await directDb.query('SELECT id FROM doctors WHERE user_id = $1', [user_id]);
+        const existing = await directDb.query('SELECT id FROM doctors WHERE user_id = ?', [user_id]);
         if (existing.rows.length > 0) {
             return res.status(400).json({ error: 'Profile already exists' });
         }
 
         const insertQuery = `
-            INSERT INTO doctors (user_id, organization_id, specialization, bio, availability, website_url, department, designation, doctor_code, license_number) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *
-        `;
+            INSERT INTO doctors (user_id, organization_id, specialization, bio, availability, website_url, department, designation, branch_id) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) `;
+            
         const { rows } = await directDb.query(insertQuery, [
-            user_id, orgId, specialization, bio, availability, website_url, department, designation, doctor_code, license_number
+            user_id, orgId, specialization, bio, availability, website_url, department, designation, branch_id
         ]);
 
         res.json(rows[0]);

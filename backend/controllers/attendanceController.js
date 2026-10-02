@@ -20,8 +20,9 @@ exports.getTodayAttendance = async (req, res) => {
 exports.checkIn = async (req, res) => {
     try {
         const { userId, shift } = req.body;
-        const today = new Date().toISOString().split('T')[0];
-        const now = new Date().toISOString();
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata'});
+
+        const now = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Kolkata', hour12: false });
         const orgId = req.organizationId;
 
         let finalShift = shift;
@@ -86,6 +87,12 @@ exports.getActiveStaff = async (req, res) => {
     try {
         const today = new Date().toISOString().split('T')[0];
         const orgId = req.organizationId;
+
+const { rows: dbCheck } = await directDb.query(
+    `SELECT DATABASE() AS db_name`
+);
+
+console.log("ACTIVE DB:", dbCheck);
 
         const { rows } = await directDb.query(`
             SELECT a.*, u.full_name, u.role, u.email
@@ -241,6 +248,11 @@ exports.getStaffByRole = async (req, res) => {
 exports.updateUserShift = async (req, res) => {
     try {
         const { userId, assigned_shift, shift_start_time, shift_end_time } = req.body;
+         const { rows: dbRows } = await directDb.query(
+            'SELECT DATABASE() AS db_name'
+        );
+
+        console.log("SHIFT UPDATE DATABASE:", dbRows[0]?.db_name);
         await directDb.query(
             'UPDATE users SET assigned_shift = $1, shift_start_time = $2, shift_end_time = $3 WHERE id = $4',
             [assigned_shift, shift_start_time, shift_end_time, userId]

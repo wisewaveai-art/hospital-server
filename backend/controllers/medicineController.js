@@ -112,8 +112,7 @@ exports.addMedicine = async (req, res) => {
         const queryStr = `
             INSERT INTO medicines 
             (organization_id, product_code, name, generic_name, hsn_code, category_id, strength, unit, quantity, expiry_date, price_per_unit, batch_number, gst_percentage, low_stock_threshold) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *
-        `;
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`; // RETURNING *`;
         const params = [
             orgId, product_code, m.name, m.generic_name, m.hsn_code, m.category_id || null, 
             m.strength, m.unit, m.quantity || 0, m.expiry_date || null, 

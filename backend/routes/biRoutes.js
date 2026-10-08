@@ -9,5 +9,6 @@ router.get('/analytics', biController.getGeneralAnalytics);
 router.get('/stocks', biController.getStockAnalytics);
 router.get('/finance', biController.getFinancialAnalytics);
 router.post('/expenses', biController.addExpense);
+router.get('/expenses', biController.getExpenses);
 
 module.exports = router;

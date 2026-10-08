@@ -161,3 +161,16 @@ exports.addExpense = async (req, res) => {
         res.status(500).json({ error: 'Server error' });
     }
 };
+
+exports.getExpenses = async (req, res) => {
+    try {
+        const orgId = req.organizationId;
+
+        const { rows } = await directDb.query(`SELECT *FROM expenses WHERE organization_id = $1 ORDER BY expense_date DESC`, [orgId]);
+
+        res.status(200).json(rows);
+    } catch (err) {
+        console.error("Error fetching expenses:", err);
+        res.status(500).json({error: "Server error" });
+    }
+};

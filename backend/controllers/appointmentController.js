@@ -15,10 +15,19 @@ exports.bookAppointment = async (req, res) => {
         const { patient_user_id, doctor_id, appointment_date, reason, branch_id } = req.body;
         const orgId = req.organizationId;
 
-        // Add source column if missing
         try {
-            await directDb.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS source VARCHAR(50) DEFAULT 'manual'`);
-        } catch(e) {}
+            const columnCheck = await directDb.query(`
+        SHOW COLUMNS FROM appointments LIKE 'source'
+    `);
+
+            if (columnCheck.rows.length === 0) {
+                await directDb.query(`ALTER TABLE appointments ADD COLUMN source VARCHAR(50) DEFAULT 'manual'`);
+
+                console.log('✅ source column added to appointments');
+            }
+        } catch (e) {
+            console.error('❌ Error adding source column:', e);
+        }
 
         await directDb.query(
             'INSERT INTO appointments (organization_id, patient_user_id, doctor_id, appointment_date, reason, status, source) VALUES ($1, $2, $3, $4, $5, $6, $7)',
@@ -35,15 +44,15 @@ exports.bookAppointment = async (req, res) => {
         try {
             const vvKeyRes = await directDb.query("SELECT value FROM settings WHERE organization_id = $1 AND key_name = 'vibevoice_api_key'", [orgId]);
             const vvWfRes = await directDb.query("SELECT value FROM settings WHERE organization_id = $1 AND key_name = 'vibevoice_workflow_id'", [orgId]);
-            
+
             if (vvKeyRes.rowCount > 0 && vvWfRes.rowCount > 0 && vvKeyRes.rows[0].value && vvWfRes.rows[0].value) {
                 const apiKey = vvKeyRes.rows[0].value;
                 const wfId = vvWfRes.rows[0].value;
-                
+
                 // Get Patient Phone
                 const pRes = await directDb.query('SELECT full_name, phone FROM users WHERE id = $1', [patient_user_id]);
                 const docRes = await directDb.query('SELECT u.full_name FROM doctors d JOIN users u ON d.user_id = u.id WHERE d.id = $1', [doctor_id]);
-                
+
                 if (pRes.rowCount > 0 && pRes.rows[0].phone) {
                     const phone = pRes.rows[0].phone;
                     const patientName = pRes.rows[0].full_name;
@@ -68,7 +77,7 @@ exports.bookAppointment = async (req, res) => {
                     }).catch(e => console.error('VibeVoice trigger failed:', e));
                 }
             }
-        } catch(vvErr) {
+        } catch (vvErr) {
             console.error('VibeVoice integration error:', vvErr);
         }
         // ----------------------------------
@@ -82,7 +91,7 @@ exports.bookAppointment = async (req, res) => {
 
 exports.getMyAppointments = async (req, res) => {
     try {
-        const { userId } = req.params; 
+        const { userId } = req.params;
         const orgId = req.organizationId;
 
         let queryStr = `
@@ -95,7 +104,7 @@ exports.getMyAppointments = async (req, res) => {
             WHERE a.patient_user_id = $1 AND a.organization_id = $2
             ORDER BY a.appointment_date ASC
         `;
-        
+
         const rows = await safeQuery(queryStr, [userId, orgId]);
 
         const formatted = rows.map(r => {
@@ -129,7 +138,7 @@ exports.getAllAppointments = async (req, res) => {
             WHERE a.organization_id = $1
             ORDER BY a.appointment_date DESC
         `;
-        
+
         const rows = await safeQuery(queryStr, [orgId]);
 
         const formatted = rows.map(r => {
@@ -152,23 +161,50 @@ exports.updateStatus = async (req, res) => {
     try {
         const { id } = req.params;
         const { status } = req.body;
-        
-        try {
-            await directDb.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Scheduled'`);
-            await directDb.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS token_number VARCHAR(20)`);
-        } catch(e) {}
-        
-        let token_number = null;
-        if (status === 'Approved') {
-            token_number = 'T-' + Math.floor(1000 + Math.random() * 9000);
-            await directDb.query('UPDATE appointments SET status = $1, token_number = $2 WHERE id = $3', [status, token_number, id]);
-        } else {
-            await directDb.query('UPDATE appointments SET status = $1 WHERE id = $2', [status, id]);
+
+        // Add token_number column if missing
+        const column = await directDb.query(
+            `SHOW COLUMNS FROM appointments LIKE 'token_number'`
+        );
+
+        if (column.rows.length === 0) {
+            await directDb.query(`
+                ALTER TABLE appointments
+                ADD COLUMN token_number VARCHAR(20) NULL
+            `);
         }
 
-        res.json({ message: 'Status updated' });
+        if (status === 'Approved') {
+            const token_number =
+                'T-' + Math.floor(1000 + Math.random() * 9000);
+
+            await directDb.query(
+                `UPDATE appointments
+                 SET status = $1, token_number = $2
+                 WHERE id = $3`,
+                [status, token_number, id]
+            );
+
+            return res.json({
+                message: 'Status updated',
+                token_number
+            });
+        }
+
+        await directDb.query(
+            `UPDATE appointments
+             SET status = $1
+             WHERE id = $2`,
+            [status, id]
+        );
+
+        res.json({
+            message: 'Status updated',
+            token_number: null
+        });
+
     } catch (err) {
-        console.error(err);
+        console.error('Error updating appointment status:', err);
         res.status(500).json({ error: 'Server error' });
     }
 };
@@ -181,7 +217,7 @@ exports.getDoctorAppointments = async (req, res) => {
         if (docRes.rowCount === 0) {
             return res.json([]);
         }
-        
+
         const doctorId = docRes.rows[0].id;
 
         const orgId = req.organizationId;
@@ -193,7 +229,7 @@ exports.getDoctorAppointments = async (req, res) => {
             WHERE a.doctor_id = $1 AND a.organization_id = $2
             ORDER BY a.appointment_date ASC
         `;
-        
+
         const rows = await safeQuery(queryStr, [doctorId, orgId]);
 
         const formatted = rows.map(r => {
@@ -213,8 +249,8 @@ exports.getDoctorAppointments = async (req, res) => {
 
 exports.getAvailableSlots = async (req, res) => {
     try {
-        let { date, orgId = '0001-0000-00001' } = req.query; // default org for open API
-        
+        let { date } = req.query; // default org for open API
+        const orgId = req.organizationId;
         // Handle missing or unpopulated template variables
         if (!date || date === '{{date}}') {
             const now = new Date();
@@ -230,17 +266,17 @@ exports.getAvailableSlots = async (req, res) => {
             afternoonEnd: '20:00',
             allowFutureDays: 7
         };
-        
+
         if (confRes.rowCount > 0 && confRes.rows[0].value) {
             try {
                 const dbConf = typeof confRes.rows[0].value === 'string' ? JSON.parse(confRes.rows[0].value) : confRes.rows[0].value;
                 config = { ...config, ...dbConf };
-            } catch(e) {}
+            } catch (e) { }
         }
 
         // Check if date is within allowed future days
         let targetDate = new Date(date);
-        
+
         // If JS parsed it as year 2001 (default for missing year like "18 July"), set to current year
         if (targetDate.getFullYear() === 2001) {
             targetDate.setFullYear(new Date().getFullYear());
@@ -249,14 +285,14 @@ exports.getAvailableSlots = async (req, res) => {
                 targetDate.setFullYear(new Date().getFullYear() + 1);
             }
         }
-        
+
         // Re-format the 'date' string to YYYY-MM-DD so our DB queries match correctly!
         date = targetDate.toISOString().split('T')[0];
 
-        targetDate.setHours(0,0,0,0);
+        targetDate.setHours(0, 0, 0, 0);
         const today = new Date();
-        today.setHours(0,0,0,0);
-        
+        today.setHours(0, 0, 0, 0);
+
         const diffDays = Math.round((targetDate - today) / (1000 * 60 * 60 * 24));
         if (diffDays < 0 || diffDays > config.allowFutureDays) {
             return res.json({ date, config, availableSlots: [], message: 'Date out of allowed booking range' });
@@ -274,7 +310,7 @@ exports.getAvailableSlots = async (req, res) => {
             const slots = [];
             let current = new Date(`${date}T${startStr}:00`);
             const end = new Date(`${date}T${endStr}:00`);
-            
+
             while (current < end) {
                 const timeMs = current.getTime();
                 // Check if booked or in the past
@@ -323,11 +359,11 @@ exports.cancelAppointment = async (req, res) => {
         if (withCall && apt.patient_phone) {
             const vvKeyRes = await directDb.query("SELECT value FROM settings WHERE organization_id = $1 AND key_name = 'vibevoice_api_key'", [apt.organization_id]);
             const vvWfRes = await directDb.query("SELECT value FROM settings WHERE organization_id = $1 AND key_name = 'vibevoice_workflow_id'", [apt.organization_id]);
-            
+
             if (vvKeyRes.rowCount > 0 && vvWfRes.rowCount > 0 && vvKeyRes.rows[0].value && vvWfRes.rows[0].value) {
                 const apiKey = vvKeyRes.rows[0].value;
                 const wfId = vvWfRes.rows[0].value;
-                
+
                 fetch(`https://modelvoice.wisecrestsolutions.com/api/v1/public/agent/workflow/${wfId}`, {
                     method: 'POST',
                     headers: {
@@ -381,7 +417,7 @@ exports.cancelAllAppointments = async (req, res) => {
         }
 
         const appointmentIds = aptRes.rows.map(a => a.id);
-        
+
         // Update all to cancelled
         await directDb.query(`UPDATE appointments SET status = 'cancelled' WHERE id = ANY($1)`, [appointmentIds]);
 
@@ -389,7 +425,7 @@ exports.cancelAllAppointments = async (req, res) => {
         if (withCall) {
             const vvKeyRes = await directDb.query("SELECT value FROM settings WHERE organization_id = $1 AND key_name = 'vibevoice_api_key'", [orgId]);
             const vvWfRes = await directDb.query("SELECT value FROM settings WHERE organization_id = $1 AND key_name = 'vibevoice_workflow_id'", [orgId]);
-            
+
             if (vvKeyRes.rowCount > 0 && vvWfRes.rowCount > 0 && vvKeyRes.rows[0].value && vvWfRes.rows[0].value) {
                 const apiKey = vvKeyRes.rows[0].value;
                 const wfId = vvWfRes.rows[0].value;
@@ -434,7 +470,7 @@ exports.rescheduleAppointment = async (req, res) => {
     try {
         const { id } = req.params;
         const { new_date } = req.body;
-        
+
         // Fetch appointment details
         const aptRes = await directDb.query(`
             SELECT a.*, u.full_name as patient_name, u.phone as patient_phone, 
@@ -456,11 +492,11 @@ exports.rescheduleAppointment = async (req, res) => {
         if (apt.patient_phone) {
             const vvKeyRes = await directDb.query("SELECT value FROM settings WHERE organization_id = $1 AND key_name = 'vibevoice_api_key'", [apt.organization_id]);
             const vvWfRes = await directDb.query("SELECT value FROM settings WHERE organization_id = $1 AND key_name = 'vibevoice_workflow_id'", [apt.organization_id]);
-            
+
             if (vvKeyRes.rowCount > 0 && vvWfRes.rowCount > 0 && vvKeyRes.rows[0].value && vvWfRes.rows[0].value) {
                 const apiKey = vvKeyRes.rows[0].value;
                 const wfId = vvWfRes.rows[0].value;
-                
+
                 fetch(`https://modelvoice.wisecrestsolutions.com/api/v1/public/agent/workflow/${wfId}`, {
                     method: 'POST',
                     headers: {

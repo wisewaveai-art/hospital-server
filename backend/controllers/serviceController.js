@@ -22,8 +22,7 @@ exports.addService = async (req, res) => {
 
         const queryStr = `
             INSERT INTO services (organization_id, name, description, cost, status) 
-            VALUES ($1, $2, $3, $4, $5) RETURNING *
-        `;
+            VALUES ($1, $2, $3, $4, $5)`;// RETURNING *`;
         const { rows } = await directDb.query(queryStr, [orgId, name, description || '', cost || 0, status || 'active']);
         res.status(201).json(rows[0]);
     } catch (err) {
@@ -45,7 +44,7 @@ exports.updateService = async (req, res) => {
         const values = Object.values(updates);
         const setClause = columns.map((col, i) => `${col} = $${i + 1}`).join(', ');
 
-        const queryStr = `UPDATE services SET ${setClause} WHERE id = $${columns.length + 1} AND organization_id = $${columns.length + 2} RETURNING *`;
+        const queryStr = `UPDATE services SET ${setClause} WHERE id = $${columns.length + 1} AND organization_id = $${columns.length + 2}`;// RETURNING *`;
         const { rows } = await directDb.query(queryStr, [...values, id, orgId]);
         
         if (rows.length === 0) throw new Error("Update Failed");

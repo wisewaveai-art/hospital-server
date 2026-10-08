@@ -213,3 +213,117 @@ exports.updateByKey = async (req, res) => {
         res.status(500).json({ error: 'Server error updating setting' });
     }
 };
+
+exports.getAppointmentConfig = async (req, res) => {
+    try {
+        const orgId = req.organizationId;
+
+        const result = await directDb.query(
+            `SELECT value
+             FROM settings
+             WHERE organization_id = $1
+             AND key_name = 'appointment_config'`,
+            [orgId]
+        );
+
+        const defaultConfig = {
+            slotDurationMins: 30,
+            morningStart: '10:00',
+            morningEnd: '12:00',
+            afternoonStart: '13:00',
+            afternoonEnd: '20:00',
+            allowFutureDays: 7
+        };
+
+        if (result.rowCount === 0 || !result.rows[0].value) {
+            return res.json({
+                config: defaultConfig
+            });
+        }
+
+        let config = result.rows[0].value;
+
+        if (typeof config === 'string') {
+            config = JSON.parse(config);
+        }
+
+        res.json({
+            config: {
+                ...defaultConfig,
+                ...config
+            }
+        });
+
+    } catch (err) {
+        console.error('Get Appointment Config Error:', err);
+        res.status(500).json({
+            error: 'Server error fetching appointment config'
+        });
+    }
+};
+
+exports.updateAppointmentConfig = async (req, res) => {
+    try {
+        const orgId = req.organizationId;
+
+        const {
+            slotDurationMins,
+            morningStart,
+            morningEnd,
+            afternoonStart,
+            afternoonEnd,
+            allowFutureDays
+        } = req?.body?.value;
+
+        const config = {
+            slotDurationMins,
+            morningStart,
+            morningEnd,
+            afternoonStart,
+            afternoonEnd,
+            allowFutureDays
+        };
+ 
+        const existing = await directDb.query(
+            `SELECT id FROM settings
+             WHERE organization_id = $1
+             AND key_name = 'appointment_config'`,
+            [orgId]
+        );
+
+        if (existing.rowCount > 0) {
+            await directDb.query(
+                `UPDATE settings
+                 SET value = $1
+                 WHERE organization_id = $2
+                 AND key_name = 'appointment_config'`,
+                [
+                    JSON.stringify(config),
+                    orgId
+                ]
+            );
+        } else {
+            await directDb.query(
+                `INSERT INTO settings
+                 (organization_id, key_name, value)
+                 VALUES ($1, $2, $3)`,
+                [
+                    orgId,
+                    'appointment_config',
+                    JSON.stringify(config)
+                ]
+            );
+        }
+
+        res.json({
+            message: 'Appointment configuration updated successfully',
+            config
+        });
+
+    } catch (err) {
+        console.error('Update Appointment Config Error:', err);
+        res.status(500).json({
+            error: 'Server error updating appointment config'
+        });
+    }
+};

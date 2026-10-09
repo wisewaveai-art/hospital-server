@@ -4,6 +4,7 @@ const directDb = require('../utils/directDb');
 exports.getAllStaff = async (req, res) => {
     try {
         const orgId = req.organizationId;
+        const { role } = req.query;
         let queryStr = `
             SELECT u.id, u.full_name, u.role, u.email, u.phone, u.organization_id, o.name as org_name,
                    s.designation, s.shift_start, s.shift_end, s.joined_date, s.base_salary, s.payment_type, s.bank_account_details
@@ -18,7 +19,10 @@ exports.getAllStaff = async (req, res) => {
             queryStr += ' AND u.organization_id = $1';
             params.push(orgId);
         }
-
+        if (role) {
+            params.push(role);
+            queryStr += ` AND u.role = $${params.length}`;
+        }
         queryStr += ' ORDER BY u.full_name ASC';
 
         const { rows } = await directDb.query(queryStr, params);
